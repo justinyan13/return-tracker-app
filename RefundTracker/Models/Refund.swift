@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class Refund {
+    static let simplifiedItemPlaceholder = "Return"
+
     @Attribute(.unique) var id: UUID
     var retailerName: String
     var itemName: String
@@ -55,6 +57,17 @@ final class Refund {
 
     var isResolved: Bool {
         status == .refunded || status == .cancelled || actualRefundDate != nil
+    }
+
+    var userFacingItemName: String? {
+        let trimmedName = itemName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty,
+              trimmedName.caseInsensitiveCompare(Self.simplifiedItemPlaceholder)
+                != .orderedSame else {
+            return nil
+        }
+        return trimmedName
     }
 
     init(

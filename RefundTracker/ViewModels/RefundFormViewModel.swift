@@ -12,9 +12,10 @@ final class RefundFormViewModel {
 
     let isEditing: Bool
     let shippedDateUpperBound: Date
+    let tracksShipmentDate: Bool
 
     private let calendar: Calendar
-    private let originalShippedDate: Date?
+    private let originalTrackedDate: Date?
     private var defaultExpectedBusinessDays: Int
     private var shouldDeriveExpectedDate: Bool
 
@@ -33,7 +34,7 @@ final class RefundFormViewModel {
         isEditing = refund != nil
 
         if let refund {
-            let savedShippedDate = refund.shippedDate ?? refund.returnDate
+            let savedTrackedDate = refund.shippedDate ?? refund.returnDate
             let upperBound = Self.earliestDate(
                 among: [
                     now,
@@ -44,10 +45,11 @@ final class RefundFormViewModel {
             retailerName = refund.retailerName
             amountText = NSDecimalNumber(decimal: refund.refundAmount).stringValue
             currencyCode = Self.normalizedCurrencyCode(refund.currencyCode)
-            returnDate = min(savedShippedDate, upperBound)
+            returnDate = min(savedTrackedDate, upperBound)
             expectedRefundDate = refund.expectedRefundDate
-            originalShippedDate = savedShippedDate
+            originalTrackedDate = savedTrackedDate
             shippedDateUpperBound = upperBound
+            tracksShipmentDate = refund.shippedDate != nil
             shouldDeriveExpectedDate = false
         } else {
             retailerName = ""
@@ -59,10 +61,19 @@ final class RefundFormViewModel {
                 to: today,
                 calendar: calendar
             )
-            originalShippedDate = nil
+            originalTrackedDate = nil
             shippedDateUpperBound = now
+            tracksShipmentDate = true
             shouldDeriveExpectedDate = true
         }
+    }
+
+    var trackedDateTitle: String {
+        tracksShipmentDate ? "Shipped date" : "Return date"
+    }
+
+    var trackedDateSymbol: String {
+        tracksShipmentDate ? "shippingbox.fill" : "arrow.uturn.backward.circle.fill"
     }
 
     var amount: Decimal? {
@@ -113,7 +124,7 @@ final class RefundFormViewModel {
         }
     }
 
-    func setShippedDate(_ date: Date) {
+    func setTrackedDate(_ date: Date) {
         returnDate = min(
             calendar.startOfDay(for: date),
             calendar.startOfDay(for: shippedDateUpperBound)
@@ -131,7 +142,7 @@ final class RefundFormViewModel {
         refund.currencyCode = currencyCode
 
         if refund.itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            refund.itemName = "Return"
+            refund.itemName = Refund.simplifiedItemPlaceholder
         }
 
         if !isEditing {
@@ -140,23 +151,26 @@ final class RefundFormViewModel {
             deriveExpectedDate()
             refund.expectedRefundDate = expectedRefundDate
             refund.status = .shipped
-        } else if shippedDateChanged {
+        } else if trackedDateChanged {
             refund.returnDate = returnDate
-            refund.shippedDate = returnDate
             deriveExpectedDate()
             refund.expectedRefundDate = expectedRefundDate
 
-            if refund.status == .preparingReturn {
-                refund.status = .shipped
+            if tracksShipmentDate {
+                refund.shippedDate = returnDate
+
+                if refund.status == .preparingReturn {
+                    refund.status = .shipped
+                }
             }
         }
 
         refund.touch()
     }
 
-    private var shippedDateChanged: Bool {
-        guard let originalShippedDate else { return true }
-        return !calendar.isDate(returnDate, inSameDayAs: originalShippedDate)
+    private var trackedDateChanged: Bool {
+        guard let originalTrackedDate else { return true }
+        return !calendar.isDate(returnDate, inSameDayAs: originalTrackedDate)
     }
 
     private func deriveExpectedDate() {

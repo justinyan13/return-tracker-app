@@ -169,12 +169,15 @@ struct RefundFormView: View {
             .id(Field.amount)
 
             VStack(alignment: .leading, spacing: 8) {
-                fieldLabel("Shipped date", symbol: "shippingbox.fill")
+                fieldLabel(
+                    viewModel.trackedDateTitle,
+                    symbol: viewModel.trackedDateSymbol
+                )
                 DatePicker(
-                    "Shipped date",
+                    viewModel.trackedDateTitle,
                     selection: Binding(
                         get: { viewModel.returnDate },
-                        set: viewModel.setShippedDate
+                        set: viewModel.setTrackedDate
                     ),
                     in: ...viewModel.shippedDateUpperBound,
                     displayedComponents: .date

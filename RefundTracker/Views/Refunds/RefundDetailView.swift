@@ -4,6 +4,7 @@ import SwiftUI
 struct RefundDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppSettings.self) private var settings
 
     @Bindable var refund: Refund
@@ -175,31 +176,52 @@ struct RefundDetailView: View {
     }
 
     private var keyDatesCard: some View {
-        HStack(alignment: .top, spacing: 16) {
-            if let shippedDate = refund.shippedDate {
-                RefundDateSignal(
-                    title: "Shipped",
-                    date: shippedDate,
-                    caption: "Return sent",
-                    symbolName: "truck.box.fill",
-                    tint: RefundTheme.blue
-                )
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let shippedDate = refund.shippedDate {
+                        shippedDateSignal(shippedDate)
+                        Divider()
+                    }
 
-                Divider()
-                    .frame(height: 72)
+                    expectedDateSignal
+                }
+            } else {
+                HStack(alignment: .top, spacing: 16) {
+                    if let shippedDate = refund.shippedDate {
+                        shippedDateSignal(shippedDate)
+
+                        Divider()
+                            .frame(height: 72)
+                    }
+
+                    expectedDateSignal
+                }
             }
-
-            RefundDateSignal(
-                title: "Expected",
-                date: refund.expectedRefundDate,
-                caption: expectedDateCaption,
-                symbolName: effectiveStatus == .overdue
-                    ? "exclamationmark.calendar.fill"
-                    : "calendar.badge.clock",
-                tint: statusTint
-            )
         }
         .refundGlassCard(tint: statusTint)
+    }
+
+    private func shippedDateSignal(_ date: Date) -> some View {
+        RefundDateSignal(
+            title: "Shipped",
+            date: date,
+            caption: "Return sent",
+            symbolName: "truck.box.fill",
+            tint: RefundTheme.blue
+        )
+    }
+
+    private var expectedDateSignal: some View {
+        RefundDateSignal(
+            title: "Expected",
+            date: refund.expectedRefundDate,
+            caption: expectedDateCaption,
+            symbolName: effectiveStatus == .overdue
+                ? "exclamationmark.calendar.fill"
+                : "calendar.badge.clock",
+            tint: statusTint
+        )
     }
 
     private var timelineCard: some View {
@@ -345,7 +367,7 @@ struct RefundDetailView: View {
                         .font(.headline)
                         .foregroundStyle(.primary)
 
-                    Text("Item, order, tracking, notes, and files")
+                    Text("Tracking, notes, files, and history")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -360,8 +382,10 @@ struct RefundDetailView: View {
 
     @ViewBuilder
     private var detailsRows: some View {
-        RefundInfoRow("Item", symbol: "bag") {
-            Text(refund.itemName)
+        if let itemName = refund.userFacingItemName {
+            RefundInfoRow("Item", symbol: "bag") {
+                Text(itemName)
+            }
         }
 
         if !refund.orderNumber.isEmpty {

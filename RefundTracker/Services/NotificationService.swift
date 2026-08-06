@@ -48,6 +48,7 @@ enum NotificationPlanner {
         let overdueDay = calendar.date(byAdding: .day, value: 1, to: expectedDay) ??
             expectedDay
         let overdueDelivery = deliveryTime(on: overdueDay, calendar: calendar)
+        let itemName = notificationItemName(for: refund)
 
         var candidates: [(RefundReminderKind, Date, String, String)] = []
 
@@ -61,7 +62,11 @@ enum NotificationPlanner {
                 .beforeExpectedDate,
                 deliveryTime(on: reminderDay, calendar: calendar),
                 "Refund expected soon",
-                "\(refund.retailerName) is expected to refund \(refund.itemName) in \(preferences.daysBeforeExpectedDate) days."
+                beforeExpectedBody(
+                    retailerName: refund.retailerName,
+                    itemName: itemName,
+                    days: preferences.daysBeforeExpectedDate
+                )
             ))
         }
 
@@ -70,7 +75,10 @@ enum NotificationPlanner {
                 .expectedDate,
                 expectedDelivery,
                 "Refund expected today",
-                "Check whether your \(refund.retailerName) refund for \(refund.itemName) has arrived."
+                expectedTodayBody(
+                    retailerName: refund.retailerName,
+                    itemName: itemName
+                )
             ))
         }
 
@@ -79,7 +87,10 @@ enum NotificationPlanner {
                 .overdue,
                 overdueDelivery,
                 "Refund may be overdue",
-                "Your \(refund.retailerName) refund for \(refund.itemName) was expected yesterday."
+                overdueBody(
+                    retailerName: refund.retailerName,
+                    itemName: itemName
+                )
             ))
 
             if let followUpDay = calendar.date(
@@ -169,6 +180,41 @@ enum NotificationPlanner {
             second: 0,
             of: date
         ) ?? date
+    }
+
+    private static func notificationItemName(for refund: Refund) -> String? {
+        refund.userFacingItemName
+    }
+
+    private static func beforeExpectedBody(
+        retailerName: String,
+        itemName: String?,
+        days: Int
+    ) -> String {
+        if let itemName {
+            return "\(retailerName) is expected to refund \(itemName) in \(days) days."
+        }
+        return "A refund from \(retailerName) is expected in \(days) days."
+    }
+
+    private static func expectedTodayBody(
+        retailerName: String,
+        itemName: String?
+    ) -> String {
+        if let itemName {
+            return "Check whether your \(retailerName) refund for \(itemName) has arrived."
+        }
+        return "Check whether your refund from \(retailerName) has arrived."
+    }
+
+    private static func overdueBody(
+        retailerName: String,
+        itemName: String?
+    ) -> String {
+        if let itemName {
+            return "Your \(retailerName) refund for \(itemName) was expected yesterday."
+        }
+        return "Your refund from \(retailerName) was expected yesterday."
     }
 
     private static func isOrderedBefore(

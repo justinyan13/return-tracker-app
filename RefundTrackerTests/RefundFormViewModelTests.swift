@@ -117,4 +117,39 @@ final class RefundFormViewModelTests: XCTestCase {
         XCTAssertEqual(refund.notes, "Keep this history")
         XCTAssertTrue(refund.isSampleData)
     }
+
+    @MainActor
+    func testEditingUnshippedLegacyReturnDoesNotInventShipment() {
+        let originalReturnDate = DomainTestSupport.date(2026, 8, 1)
+        let updatedReturnDate = DomainTestSupport.date(2026, 8, 3)
+        let refund = Refund(
+            retailerName: "Legacy Shop",
+            itemName: "Jacket",
+            refundAmount: 75,
+            currencyCode: "USD",
+            returnDate: originalReturnDate,
+            expectedRefundDate: DomainTestSupport.date(2026, 8, 18),
+            status: .preparingReturn
+        )
+        let viewModel = RefundFormViewModel(
+            refund: refund,
+            calendar: calendar,
+            now: DomainTestSupport.date(2026, 8, 6)
+        )
+
+        XCTAssertFalse(viewModel.tracksShipmentDate)
+        XCTAssertEqual(viewModel.trackedDateTitle, "Return date")
+
+        viewModel.setTrackedDate(updatedReturnDate)
+        viewModel.apply(to: refund)
+
+        XCTAssertTrue(
+            calendar.isDate(
+                refund.returnDate,
+                inSameDayAs: updatedReturnDate
+            )
+        )
+        XCTAssertNil(refund.shippedDate)
+        XCTAssertEqual(refund.status, .preparingReturn)
+    }
 }

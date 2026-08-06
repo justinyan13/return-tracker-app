@@ -96,6 +96,29 @@ final class NotificationPlannerTests: XCTestCase {
         )
     }
 
+    func testSimplifiedPlaceholderIsOmittedFromNotificationCopy() {
+        let refund = Refund(
+            retailerName: "Everlane",
+            itemName: "Return",
+            refundAmount: 84.50,
+            currencyCode: "USD",
+            returnDate: DomainTestSupport.date(2026, 8, 1),
+            expectedRefundDate: DomainTestSupport.date(2026, 8, 15),
+            status: .shipped
+        )
+
+        let plan = NotificationPlanner.plan(
+            for: refund,
+            preferences: enabledPreferences(),
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(plan.count, 4)
+        XCTAssertTrue(plan.allSatisfy { $0.body.contains("Everlane") })
+        XCTAssertTrue(plan.allSatisfy { !$0.body.contains("Return") })
+    }
+
     func testGlobalPlanOrdersAllRefundsChronologically() {
         let laterRefund = makeRefund(
             expectedDate: DomainTestSupport.date(2026, 8, 20)
