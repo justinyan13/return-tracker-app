@@ -1,6 +1,6 @@
 # Refund Tracker
 
-Refund Tracker is a privacy-first iPhone and iPad app for tracking money owed after an online return. It answers two questions at a glance: which refunds are still open, and which ones need follow-up?
+Refund Tracker is a privacy-first iPhone and iPad app for tracking money owed after an online return. It answers two questions at a glance: what money is coming back, and which refund needs a nudge?
 
 The app is built entirely with Apple frameworks. Records, preferences, and attachments remain on the device; there is no account, analytics SDK, API key, or server component.
 
@@ -17,6 +17,19 @@ The app is built entirely with Apple frameworks. Records, preferences, and attac
 3. Build and run with **Command-R**.
 
 No package resolution or service configuration is required. Notification permission is requested contextually—when reminders are enabled or when the first refund is saved—not at launch.
+
+## Product experience
+
+Capturing a refund is intentionally lightweight. The add screen presents four essentials:
+
+- Merchant name
+- Refund amount
+- The default currency from Settings
+- Shipped date
+
+The currency is already selected, and the expected refund date is calculated from the configured business-day window. The user can start tracking without entering an item name, order number, carrier, tracking number, notes, or other purchase details.
+
+The interface uses a colorful gradient canvas, translucent glass cards, and merchant monograms generated from the retailer name. The dashboard’s “Money Coming Back” hero keeps the outstanding balance and open, overdue, and recently refunded signals together. Merchant-first return cards then form one easy-to-scan stream, with status and shipped or expected dates visible without exposing secondary detail.
 
 ## Architecture
 
@@ -43,7 +56,7 @@ SwiftUI views own presentation state and use SwiftData's `ModelContext` for pers
 
 ## Data model
 
-`Refund` is a SwiftData `@Model` containing the retailer and item identity, order and shipment details, amount and ISO currency code, purchase/return/delivery/expected/actual dates, refund method, lifecycle status, notes, timestamps, and a cascade relationship to attachment metadata.
+`Refund` is a SwiftData `@Model` containing merchant identity, amount and ISO currency code, shipment and refund dates, lifecycle status, timestamps, optional supporting details, and a cascade relationship to attachment metadata. The persistence model can represent a full refund lifecycle, while the primary capture experience deliberately asks for only the four essentials above. New records use a neutral internal item label rather than asking the user for one.
 
 `RefundAttachment` stores metadata and an app-generated stored filename, not the file bytes. File contents live together under `Application Support/RefundTracker/Attachments` instead of being placed in the database. Photo data is written atomically with file protection, while file-picker selections are copied from their security-scoped URLs into the app-managed directory. Generated filenames prevent collisions. The detail screen shows attachment metadata and offers the native share sheet for opening or exporting the local file; it does not currently include an inline or Quick Look preview.
 
@@ -60,14 +73,15 @@ This avoids persisting a status that would immediately become stale at midnight 
 
 ### Business days
 
-The default expected date is calculated by advancing the configured number of Monday–Friday business days from the return date. Public holidays are intentionally not inferred: holiday calendars vary by country and carrier, and adding one without a locale-specific source would create false precision. The expected date is always editable.
+The default expected date is calculated by advancing the configured number of Monday–Friday business days from the shipped date. Public holidays are intentionally not inferred: holiday calendars vary by country and carrier, and adding one without a locale-specific source would create false precision. The default window can be adjusted globally in Settings.
 
 ## Features
 
-- Dashboard totals, attention queue, and upcoming expected dates
-- Search, comprehensive filtering, and sorting
-- Guided add/edit form with validation and sensible date defaults
-- Status actions and an event timeline on each detail screen
+- Playful “Money Coming Back” dashboard with compact financial signals
+- Merchant-first glass-card streams with clear status and date cues
+- Four-essential capture flow with validation and automatic expected dates
+- Search, practical filters, and sorting
+- Focused status actions for shipped, delivered, refunded, disputed, and cancelled returns
 - Native photo and file import with local attachment storage
 - Swift Charts insights for monthly refunds and retailer turnaround time
 - Configurable local reminders before, on, and after expected dates
@@ -105,7 +119,7 @@ xcodebuild test \
   -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
-The unit suite covers status precedence and overdue behavior, business-day/default-date calculations, dashboard totals, list filters and sorting, CSV escaping, and notification planning. UI tests cover adding, editing, completing, filtering, and deleting a refund.
+The unit suite covers status precedence and overdue behavior, business-day/default-date calculations, dashboard totals, list filters and sorting, CSV escaping, and notification planning. UI tests cover lightweight capture, editing, completing, overdue filtering, and deletion.
 
 UI tests pass `--ui-testing`, which gives the app a fresh in-memory SwiftData store and bypasses onboarding. `--ui-testing-seed` adds deterministic records for filter scenarios. These arguments are ignored during normal use.
 

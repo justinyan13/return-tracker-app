@@ -10,18 +10,13 @@ struct RefundFormView: View {
     private let refund: Refund?
     @State private var viewModel: RefundFormViewModel
     @State private var didAttemptSave = false
-    @State private var didApplySettingsDefaults = false
+    @State private var didApplySettings = false
     @State private var saveErrorMessage: String?
     @FocusState private var focusedField: Field?
 
-    private enum Field {
-        case retailer
-        case item
+    private enum Field: Hashable {
+        case merchant
         case amount
-        case order
-        case tracking
-        case carrier
-        case notes
     }
 
     init(refund: Refund? = nil) {
@@ -31,33 +26,35 @@ struct RefundFormView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                requiredDetailsSection
-                returnDatesSection
-                refundDetailsSection
-                trackingSection
-                notesSection
+            ZStack {
+                RefundBackdrop()
 
-                if didAttemptSave && !viewModel.validationMessages.isEmpty {
-                    validationSection
+                ScrollView {
+                    VStack(spacing: 22) {
+                        if focusedField == nil {
+                            introduction
+                        }
+
+                        refundCard
+
+                        if didAttemptSave && !viewModel.validationMessages.isEmpty {
+                            validationCard
+                        }
+
+                        saveButton
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, 28)
                 }
             }
-            .navigationTitle(refund == nil ? "Track a refund" : "Edit refund")
+            .navigationTitle(refund == nil ? "Add refund" : "Edit refund")
             .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        save()
-                    }
-                    .fontWeight(.semibold)
-                    .accessibilityIdentifier("saveRefundButton")
                 }
 
                 ToolbarItemGroup(placement: .keyboard) {
@@ -69,7 +66,7 @@ struct RefundFormView: View {
             }
             .interactiveDismissDisabled(hasUnsavedContent)
             .onAppear {
-                applySettingsDefaultsIfNeeded()
+                applySettingsIfNeeded()
             }
             .alert("Couldn’t save refund", isPresented: saveErrorBinding) {
                 Button("OK", role: .cancel) {}
@@ -79,204 +76,161 @@ struct RefundFormView: View {
         }
     }
 
-    private var requiredDetailsSection: some View {
-        Section {
-            TextField("Retailer", text: $viewModel.retailerName)
-                .textContentType(.organizationName)
-                .textInputAutocapitalization(.words)
-                .submitLabel(.next)
-                .focused($focusedField, equals: .retailer)
-                .onSubmit { focusedField = .item }
-                .accessibilityIdentifier("retailerField")
+    private var introduction: some View {
+        VStack(spacing: 10) {
+            MerchantMark(
+                name: viewModel.retailerName.isEmpty
+                    ? "Refund"
+                    : viewModel.retailerName,
+                size: 58
+            )
 
-            TextField("Item name", text: $viewModel.itemName)
-                .textInputAutocapitalization(.sentences)
-                .submitLabel(.next)
-                .focused($focusedField, equals: .item)
-                .onSubmit { focusedField = .amount }
-                .accessibilityIdentifier("itemField")
+            Text(refund == nil ? "Track money coming back" : "Update this refund")
+                .font(.title2.bold())
+                .multilineTextAlignment(.center)
 
-            HStack {
-                Menu(viewModel.currencyCode) {
-                    Picker("Currency", selection: $viewModel.currencyCode) {
-                        ForEach(Self.currencyCodes, id: \.self) { code in
-                            Text(code).tag(code)
-                        }
-                    }
-                }
-                .font(.body.monospaced())
-                .accessibilityLabel("Currency")
-
-                TextField("Refund amount", text: $viewModel.amountText)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .focused($focusedField, equals: .amount)
-                    .accessibilityIdentifier("amountField")
-            }
-
-            TextField("Order number (optional)", text: $viewModel.orderNumber)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($focusedField, equals: .order)
-                .accessibilityIdentifier("orderNumberField")
-        } header: {
-            Text("Refund")
-        } footer: {
-            Text("Retailer, item, and amount are required.")
+            Text("Just the essentials. We’ll calculate when the refund should arrive.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
     }
 
-    private var returnDatesSection: some View {
-        Section("Dates") {
-            Toggle("Include purchase date", isOn: $viewModel.includesPurchaseDate)
-            if viewModel.includesPurchaseDate {
-                DatePicker(
-                    "Purchase date",
-                    selection: $viewModel.purchaseDate,
-                    in: ...viewModel.returnDate,
-                    displayedComponents: .date
+    private var refundCard: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            RefundSectionHeading(
+                title: "Refund details",
+                subtitle: "You can update these details anytime.",
+                symbol: "arrow.uturn.backward.circle.fill"
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel("Merchant name", symbol: "storefront")
+                TextField("Merchant name", text: $viewModel.retailerName)
+                    .textContentType(.organizationName)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.next)
+                    .focused($focusedField, equals: .merchant)
+                    .onSubmit { focusedField = .amount }
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 52)
+                    .background(
+                        fieldBackground,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+                    .accessibilityIdentifier("retailerField")
+            }
+            .id(Field.merchant)
+
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel("Refund amount", symbol: "banknote")
+
+                HStack(spacing: 12) {
+                    Text(viewModel.currencyCode)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(
+                            LinearGradient(
+                                colors: [RefundTheme.violet, RefundTheme.blue],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            in: Capsule()
+                        )
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Currency \(viewModel.currencyCode)")
+                        .accessibilityIdentifier("currencyChip")
+
+                    TextField("0.00", text: $viewModel.amountText)
+                        .keyboardType(.decimalPad)
+                        .font(.title2.monospacedDigit())
+                        .multilineTextAlignment(.trailing)
+                        .frame(
+                            maxWidth: .infinity,
+                            minHeight: 52,
+                            alignment: .trailing
+                        )
+                        .contentShape(Rectangle())
+                        .focused($focusedField, equals: .amount)
+                        .accessibilityLabel("Refund amount")
+                        .accessibilityIdentifier("amountField")
+                }
+                .padding(.horizontal, 14)
+                .frame(minHeight: 58)
+                .background(
+                    fieldBackground,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                 )
             }
+            .id(Field.amount)
 
-            DatePicker(
-                "Return date",
-                selection: Binding(
-                    get: { viewModel.returnDate },
-                    set: viewModel.setReturnDate
-                ),
-                displayedComponents: .date
-            )
-            .accessibilityIdentifier("returnDatePicker")
-
-            Toggle(
-                "Retailer received return",
-                isOn: Binding(
-                    get: { viewModel.includesReceivedDate },
-                    set: viewModel.setRetailerReceived
-                )
-            )
-            if viewModel.includesReceivedDate {
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel("Shipped date", symbol: "shippingbox.fill")
                 DatePicker(
-                    "Date received",
+                    "Shipped date",
                     selection: Binding(
-                        get: { viewModel.retailerReceivedDate },
-                        set: viewModel.setRetailerReceivedDate
+                        get: { viewModel.returnDate },
+                        set: viewModel.setShippedDate
                     ),
-                    in: viewModel.retailerReceivedDateMinimum...,
+                    in: ...viewModel.shippedDateUpperBound,
                     displayedComponents: .date
                 )
-            }
-
-            DatePicker(
-                "Refund expected",
-                selection: Binding(
-                    get: { viewModel.expectedRefundDate },
-                    set: {
-                        viewModel.expectedRefundDate = $0
-                        viewModel.expectedDateChangedByUser()
-                    }
-                ),
-                in: viewModel.returnDate...,
-                displayedComponents: .date
-            )
-            .accessibilityIdentifier("expectedRefundDatePicker")
-
-            Toggle(
-                "Refund already received",
-                isOn: Binding(
-                    get: { viewModel.includesActualRefundDate },
-                    set: viewModel.setActualRefundReceived
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .padding(.horizontal, 14)
+                .frame(minHeight: 52)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    fieldBackground,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                 )
-            )
-            if viewModel.includesActualRefundDate {
-                DatePicker(
-                    "Date received",
-                    selection: $viewModel.actualRefundDate,
-                    in: viewModel.actualRefundDateMinimum...,
-                    displayedComponents: .date
-                )
-                .accessibilityIdentifier("actualRefundDatePicker")
+                .accessibilityIdentifier("returnDatePicker")
             }
         }
+        .refundGlassCard(
+            tint: RefundTheme.color(for: viewModel.retailerName),
+            padding: 18
+        )
     }
 
-    private var refundDetailsSection: some View {
-        Section {
-            Picker("Refund method", selection: $viewModel.refundMethod) {
-                ForEach(RefundMethod.allCases) { method in
-                    Text(method.displayName).tag(method)
-                }
-            }
-
-            Picker(
-                "Status",
-                selection: Binding(
-                    get: { viewModel.status },
-                    set: viewModel.setStatus
-                )
-            ) {
-                ForEach(RefundFormViewModel.selectableStatuses) { status in
-                    Label(status.title, systemImage: status.symbolName)
-                        .tag(status)
-                }
-            }
-            .disabled(viewModel.includesActualRefundDate)
-
-            if viewModel.displayedStatus == .overdue {
-                LabeledContent("Displayed status") {
-                    Label("Overdue", systemImage: "exclamationmark.triangle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.red)
-                }
-            }
-        } header: {
-            Text("Method and status")
-        } footer: {
-            Text("Overdue is calculated automatically from the expected refund date. Disputed and cancelled are manual overrides.")
-        }
-    }
-
-    private var trackingSection: some View {
-        Section {
-            TextField("Tracking number", text: $viewModel.trackingNumber)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-                .focused($focusedField, equals: .tracking)
-                .accessibilityIdentifier("trackingNumberField")
-
-            TextField("Return carrier", text: $viewModel.returnCarrier)
-                .textInputAutocapitalization(.words)
-                .focused($focusedField, equals: .carrier)
-                .accessibilityIdentifier("returnCarrierField")
-        } header: {
-            Text("Shipping")
-        } footer: {
-            Text("Optional. Add these details when the return is shipped.")
-        }
-    }
-
-    private var notesSection: some View {
-        Section("Notes") {
-            TextField(
-                "Confirmation details, contact history, or anything else",
-                text: $viewModel.notes,
-                axis: .vertical
-            )
-            .lineLimit(3...8)
-            .focused($focusedField, equals: .notes)
-            .accessibilityIdentifier("refundNotesField")
-        }
-    }
-
-    private var validationSection: some View {
-        Section {
+    private var validationCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(viewModel.validationMessages, id: \.self) { message in
                 Label(message, systemImage: "exclamationmark.circle.fill")
-                    .foregroundStyle(.red)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(RefundTheme.coral)
             }
-        } header: {
-            Text("Check these details")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .refundGlassCard(tint: RefundTheme.coral, padding: 16)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var saveButton: some View {
+        Button {
+            save()
+        } label: {
+            Label(
+                refund == nil ? "Track refund" : "Save changes",
+                systemImage: "checkmark.circle.fill"
+            )
+        }
+        .buttonStyle(RefundPrimaryButtonStyle())
+        .accessibilityIdentifier("saveRefundButton")
+    }
+
+    private var fieldBackground: some ShapeStyle {
+        Color(uiColor: .secondarySystemGroupedBackground).opacity(0.82)
+    }
+
+    private func fieldLabel(_ title: String, symbol: String) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
     }
 
     private var saveErrorBinding: Binding<Bool> {
@@ -288,7 +242,6 @@ struct RefundFormView: View {
 
     private var hasUnsavedContent: Bool {
         !viewModel.retailerName.isEmpty
-            || !viewModel.itemName.isEmpty
             || !viewModel.amountText.isEmpty
             || refund != nil
     }
@@ -322,12 +275,12 @@ struct RefundFormView: View {
         }
     }
 
-    private func applySettingsDefaultsIfNeeded() {
-        guard refund == nil, !didApplySettingsDefaults else { return }
-        didApplySettingsDefaults = true
-        viewModel.applyCreationDefaults(
+    private func applySettingsIfNeeded() {
+        guard !didApplySettings else { return }
+        didApplySettings = true
+        viewModel.applySettings(
             expectedBusinessDays: settings.defaultExpectedRefundBusinessDays,
-            currencyCode: settings.defaultCurrencyCode
+            defaultCurrencyCode: settings.defaultCurrencyCode
         )
     }
 
@@ -366,11 +319,5 @@ struct RefundFormView: View {
             name: .refundReminderSchedulingFailed,
             object: error.localizedDescription
         )
-    }
-
-    private static var currencyCodes: [String] {
-        let common = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CNY", "INR"]
-        let current = Locale.current.currency?.identifier
-        return Array(Set(common + [current].compactMap { $0 })).sorted()
     }
 }

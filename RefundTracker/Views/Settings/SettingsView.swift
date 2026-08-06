@@ -16,7 +16,19 @@ struct SettingsView: View {
         @Bindable var settings = settings
 
         NavigationStack {
-            Form {
+            ZStack {
+                RefundBackdrop()
+
+                Form {
+                    Section {
+                        SettingsDefaultsHero(
+                            currencyCode: settings.defaultCurrencyCode,
+                            expectedDays: settings.defaultExpectedRefundBusinessDays
+                        )
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+
                 Section {
                     Stepper(
                         value: $settings.defaultExpectedRefundBusinessDays,
@@ -42,10 +54,10 @@ struct SettingsView: View {
                         )
                     }
                 } header: {
-                    Text("New refunds")
+                    Text("Set it once")
                 } footer: {
                     Text(
-                        "The expected date remains editable for every refund. Business days exclude Saturdays and Sundays."
+                        "New refunds use these defaults automatically. Business days exclude Saturdays and Sundays."
                     )
                 }
 
@@ -105,7 +117,7 @@ struct SettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Notifications")
+                    Text("Gentle nudges")
                 } footer: {
                     Text(
                         settings.notificationsEnabled
@@ -114,7 +126,7 @@ struct SettingsView: View {
                     )
                 }
 
-                Section("Appearance") {
+                Section("Pick a mood") {
                     Picker("Theme", selection: $settings.appearance) {
                         ForEach(AppAppearance.allCases) { appearance in
                             Text(appearance.displayName)
@@ -157,7 +169,7 @@ struct SettingsView: View {
                     }
                     .accessibilityIdentifier("settings.sampleData")
                 } header: {
-                    Text("Data")
+                    Text("Your data")
                 } footer: {
                     Text(
                         "Sample records are never added automatically. Resetting samples does not affect refunds you created."
@@ -178,8 +190,13 @@ struct SettingsView: View {
                     LabeledContent("Version", value: appVersion)
                     LabeledContent("Data storage", value: "On device")
                 }
+                }
+                .scrollContentBackground(.hidden)
+                .listSectionSpacing(18)
+                .tint(RefundTheme.violet)
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Make it yours")
+            .toolbarBackground(.hidden, for: .navigationBar)
             .confirmationDialog(
                 confirmationTitle,
                 isPresented: Binding(
@@ -377,6 +394,48 @@ struct SettingsView: View {
         } catch {
             presentedAlert = .error(error.localizedDescription)
         }
+    }
+}
+
+private struct SettingsDefaultsHero: View {
+    let currencyCode: String
+    let expectedDays: Int
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "wand.and.stars")
+                .font(.title.bold())
+                .foregroundStyle(.white)
+                .frame(width: 62, height: 62)
+                .background(
+                    LinearGradient(
+                        colors: [RefundTheme.violet, RefundTheme.pink],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                )
+                .shadow(color: RefundTheme.violet.opacity(0.28), radius: 12, y: 7)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Your shortcut")
+                    .font(.title3.bold())
+
+                Text(
+                    "\(currencyCode) · \(expectedDays) business \(expectedDays == 1 ? "day" : "days")"
+                )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(RefundTheme.violet)
+
+                Text("Used automatically every time you add a refund.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .refundGlassCard(tint: RefundTheme.violet, padding: 18)
+        .padding(.vertical, 4)
     }
 }
 

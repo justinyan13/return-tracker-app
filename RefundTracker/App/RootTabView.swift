@@ -38,7 +38,7 @@ struct RootTabView: View {
             }
             .id(queryRevision)
             .tabItem {
-                Label("Dashboard", systemImage: "rectangle.grid.2x2.fill")
+                Label("Dashboard", systemImage: "sparkles")
             }
             .tag(Tab.dashboard)
 
@@ -69,7 +69,7 @@ struct RootTabView: View {
                 }
                 .tag(Tab.settings)
         }
-        .tint(.accentColor)
+        .tint(RefundTheme.violet)
         .onChange(of: selectedTab) { oldValue, newValue in
             guard newValue == .add else {
                 previousTab = newValue
@@ -81,6 +81,7 @@ struct RootTabView: View {
         .sheet(isPresented: $isPresentingAddRefund) {
             RefundFormView()
                 .environment(settings)
+                .presentationCornerRadius(32)
         }
         .fullScreenCover(isPresented: $isPresentingOnboarding) {
             OnboardingView(isPresented: $isPresentingOnboarding) {

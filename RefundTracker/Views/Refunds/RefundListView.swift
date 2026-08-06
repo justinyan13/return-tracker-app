@@ -31,20 +31,21 @@ struct RefundListView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
+                RefundBackdrop()
+
                 if refunds.isEmpty {
-                    RefundWorkflowEmptyState(kind: .firstRefund) {
-                        isPresentingAddRefund = true
-                    }
+                    firstRefundEmptyState
                 } else {
                     refundList
                 }
             }
             .navigationTitle("Refunds")
+            .toolbarBackground(.hidden, for: .navigationBar)
             .searchable(
                 text: $viewModel.searchText,
                 placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "Retailer, item, order, or tracking"
+                prompt: "Merchant, order, or tracking"
             )
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -62,6 +63,7 @@ struct RefundListView: View {
             .sheet(isPresented: $isPresentingAddRefund) {
                 RefundFormView()
                     .environment(settings)
+                    .presentationCornerRadius(32)
             }
             .sheet(isPresented: $isPresentingFilters) {
                 RefundFilterSheet(viewModel: viewModel, retailers: retailers)
@@ -81,7 +83,9 @@ struct RefundListView: View {
                     refundPendingDeletion = nil
                 }
             } message: {
-                Text("This removes the refund record from this device. This action cannot be undone.")
+                Text(
+                    "This removes the refund record from this device. This action cannot be undone."
+                )
             }
             .alert("Couldn’t update refunds", isPresented: errorAlertBinding) {
                 Button("OK", role: .cancel) {}
@@ -91,13 +95,21 @@ struct RefundListView: View {
         }
     }
 
+    private var firstRefundEmptyState: some View {
+        ScrollView {
+            RefundWorkflowEmptyState(kind: .firstRefund) {
+                isPresentingAddRefund = true
+            }
+            .padding(.top, 14)
+        }
+    }
+
     private var refundList: some View {
         VStack(spacing: 0) {
             filterBar
 
             if results.isEmpty {
-                RefundWorkflowEmptyState(kind: .noResults)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                noResultsState
             } else {
                 List {
                     Section {
@@ -107,31 +119,68 @@ struct RefundListView: View {
                                     refund: refund,
                                     deleteRecord: deleteRecord
                                 )
-                                    .environment(settings)
+                                .environment(settings)
                             } label: {
                                 RefundRowView(refund: refund)
                             }
-                            .accessibilityIdentifier("refundRow_\(refund.id.uuidString)")
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button("Delete", systemImage: "trash", role: .destructive) {
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier(
+                                "refundRow_\(refund.id.uuidString)"
+                            )
+                            .swipeActions(
+                                edge: .trailing,
+                                allowsFullSwipe: false
+                            ) {
+                                Button(
+                                    "Delete",
+                                    systemImage: "trash",
+                                    role: .destructive
+                                ) {
                                     refundPendingDeletion = refund
                                 }
                             }
+                            .listRowInsets(
+                                EdgeInsets(
+                                    top: 7,
+                                    leading: 16,
+                                    bottom: 7,
+                                    trailing: 16
+                                )
+                            )
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                         }
                     } header: {
-                        Text(resultCountText)
+                        RefundSectionHeading(
+                            title: resultCountText,
+                            subtitle: resultSummary,
+                            symbol: "arrow.uturn.backward.circle.fill"
+                        )
+                        .textCase(nil)
+                        .padding(.horizontal, 2)
+                        .padding(.bottom, 4)
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
+                .accessibilityIdentifier("refundList")
             }
+        }
+    }
+
+    private var noResultsState: some View {
+        ScrollView {
+            RefundWorkflowEmptyState(kind: .noResults)
+                .padding(.top, 10)
         }
     }
 
     private var filterBar: some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 8) {
+            HStack(spacing: 9) {
                 ForEach(RefundFilterScope.allCases) { filter in
-                    RefundFilterChip(
+                    RefundScopePill(
                         title: filter.displayName,
                         symbolName: filter.symbolName,
                         isSelected: viewModel.selectedScope == filter
@@ -147,7 +196,7 @@ struct RefundListView: View {
                     )
                 }
 
-                RefundFilterChip(
+                RefundScopePill(
                     title: "More",
                     symbolName: "line.3.horizontal.decrease",
                     count: viewModel.hasAdvancedFilters
@@ -160,11 +209,16 @@ struct RefundListView: View {
                 }
                 .accessibilityIdentifier("refundFilterButton")
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
         .scrollIndicators(.hidden)
-        .background(.bar)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(RefundTheme.violet.opacity(0.09))
+                .frame(height: 1)
+        }
     }
 
     private var sortMenu: some View {
@@ -190,7 +244,14 @@ struct RefundListView: View {
     }
 
     private var resultCountText: String {
-        "\(results.count) \(results.count == 1 ? "refund" : "refunds")"
+        "\(results.count) \(results.count == 1 ? "return" : "returns")"
+    }
+
+    private var resultSummary: String {
+        let scope = viewModel.selectedScope == .all
+            ? "All statuses"
+            : viewModel.selectedScope.displayName
+        return "\(scope) · \(viewModel.sortOption.displayName)"
     }
 
     private var errorAlertBinding: Binding<Bool> {
@@ -227,6 +288,71 @@ struct RefundListView: View {
             modelContext.rollback()
             throw error
         }
+    }
+}
+
+private struct RefundScopePill: View {
+    let title: String
+    let symbolName: String
+    var count = 0
+    var isSelected = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbolName)
+                    .font(.caption.weight(.bold))
+
+                Text(title)
+                    .lineLimit(1)
+
+                if count > 0 {
+                    Text(count.formatted())
+                        .font(.caption2.weight(.heavy))
+                        .foregroundStyle(
+                            isSelected ? RefundTheme.violet : .secondary
+                        )
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            isSelected
+                                ? Color.white.opacity(0.88)
+                                : RefundTheme.violet.opacity(0.11),
+                            in: Capsule()
+                        )
+                }
+            }
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(isSelected ? .white : .primary)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 9)
+            .background {
+                if isSelected {
+                    RefundTheme.gradient(for: title)
+                        .clipShape(Capsule())
+                } else {
+                    Capsule()
+                        .fill(.thinMaterial)
+                        .overlay {
+                            Capsule()
+                                .stroke(.white.opacity(0.52), lineWidth: 1)
+                        }
+                }
+            }
+            .shadow(
+                color: isSelected
+                    ? RefundTheme.color(for: title).opacity(0.22)
+                    : .clear,
+                radius: 8,
+                y: 4
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            "\(title) filter\(count > 0 ? ", \(count) options" : "")"
+        )
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
     }
 }
 

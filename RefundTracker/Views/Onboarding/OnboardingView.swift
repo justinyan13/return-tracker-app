@@ -10,71 +10,66 @@ struct OnboardingView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                TabView(selection: $selectedPage) {
-                    ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                        OnboardingPageView(page: page)
-                            .tag(index)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .always))
-                .indexViewStyle(.page(backgroundDisplayMode: .always))
-                .animation(.easeInOut(duration: 0.2), value: selectedPage)
+            ZStack {
+                RefundBackdrop()
 
-                VStack(spacing: 12) {
-                    Button {
-                        if selectedPage == pages.count - 1 {
-                            finishAndAddRefund()
-                        } else {
-                            withAnimation {
-                                selectedPage += 1
+                VStack(spacing: 0) {
+                    TabView(selection: $selectedPage) {
+                        ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
+                            OnboardingPageView(page: page)
+                                .tag(index)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .always))
+                    .indexViewStyle(.page(backgroundDisplayMode: .interactive))
+
+                    VStack(spacing: 13) {
+                        Button {
+                            if selectedPage == pages.count - 1 {
+                                finishAndAddRefund()
+                            } else {
+                                withAnimation(.snappy) {
+                                    selectedPage += 1
+                                }
+                            }
+                        } label: {
+                            Label(
+                                selectedPage == pages.count - 1
+                                    ? "Track a refund"
+                                    : "Show me",
+                                systemImage: selectedPage == pages.count - 1
+                                    ? "plus"
+                                    : "arrow.right"
+                            )
+                        }
+                        .buttonStyle(RefundPrimaryButtonStyle())
+                        .accessibilityIdentifier("onboarding.primaryAction")
+
+                        Button(selectedPage == 0 ? "Maybe later" : "Back") {
+                            if selectedPage == 0 {
+                                isPresented = false
+                            } else {
+                                withAnimation(.snappy) {
+                                    selectedPage -= 1
+                                }
                             }
                         }
-                    } label: {
-                        Label(
-                            selectedPage == pages.count - 1
-                                ? "Track my first refund"
-                                : "Continue",
-                            systemImage: selectedPage == pages.count - 1
-                                ? "plus.circle.fill"
-                                : "arrow.right"
-                        )
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .accessibilityIdentifier("onboarding.primaryAction")
-
-                    if selectedPage > 0 {
-                        Button("Back") {
-                            withAnimation {
-                                selectedPage -= 1
-                            }
-                        }
-                        .font(.subheadline.weight(.medium))
-                    } else {
-                        Button("Maybe later") {
-                            isPresented = false
-                        }
-                        .font(.subheadline.weight(.medium))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 20)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 12)
-                .padding(.bottom, 20)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
             .toolbar {
-                if selectedPage > 0 {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Skip") {
-                            isPresented = false
-                        }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Skip") {
+                        isPresented = false
                     }
+                    .fontWeight(.semibold)
                 }
             }
+            .toolbarBackground(.hidden, for: .navigationBar)
         }
         .interactiveDismissDisabled()
     }
@@ -93,53 +88,64 @@ private struct OnboardingPageView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
-                Spacer(minLength: 18)
+                Spacer(minLength: 44)
 
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    page.tint.opacity(0.18),
-                                    page.tint.opacity(0.05)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 190, height: 190)
+                        .fill(page.tint.opacity(0.16))
+                        .frame(width: 220, height: 220)
+                        .blur(radius: 2)
 
-                    Circle()
-                        .strokeBorder(page.tint.opacity(0.2), lineWidth: 1)
-                        .frame(width: 150, height: 150)
+                    RoundedRectangle(cornerRadius: 40, style: .continuous)
+                        .fill(page.gradient)
+                        .frame(width: 154, height: 154)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 40, style: .continuous)
+                                .stroke(.white.opacity(0.42), lineWidth: 1)
+                        }
+                        .shadow(color: page.tint.opacity(0.34), radius: 28, y: 18)
 
                     Image(systemName: page.systemImage)
-                        .font(.system(size: 72, weight: .medium))
+                        .font(.system(size: 65, weight: .semibold))
                         .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(page.tint)
+                        .foregroundStyle(.white)
+
+                    Image(systemName: page.floatingSymbol)
+                        .font(.title2.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(RefundTheme.coral, in: Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.5), lineWidth: 1))
+                        .shadow(color: RefundTheme.coral.opacity(0.35), radius: 12, y: 7)
+                        .offset(x: 82, y: -70)
                 }
                 .accessibilityHidden(true)
 
                 VStack(spacing: 12) {
+                    Text(page.eyebrow.uppercased())
+                        .font(.caption.bold())
+                        .tracking(1.3)
+                        .foregroundStyle(page.tint)
+
                     Text(page.title)
-                        .font(.largeTitle.bold())
+                        .font(.system(.largeTitle, design: .rounded, weight: .heavy))
                         .multilineTextAlignment(.center)
 
                     Text(page.detail)
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                        .lineSpacing(3)
+                        .lineSpacing(4)
                 }
 
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(spacing: 12) {
                     ForEach(page.highlights, id: \.title) { highlight in
-                        HStack(alignment: .top, spacing: 12) {
+                        HStack(spacing: 13) {
                             Image(systemName: highlight.systemImage)
-                                .font(.body.weight(.semibold))
+                                .font(.body.bold())
                                 .foregroundStyle(page.tint)
-                                .frame(width: 24)
-                                .accessibilityHidden(true)
+                                .frame(width: 38, height: 38)
+                                .background(page.tint.opacity(0.12), in: Circle())
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(highlight.title)
@@ -148,17 +154,20 @@ private struct OnboardingPageView: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
+
+                            Spacer()
                         }
                         .accessibilityElement(children: .combine)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(18)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .refundGlassCard(tint: page.tint)
+
+                Label("Private and stored on this iPhone", systemImage: "lock.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 24)
-            .padding(.bottom, 44)
+            .padding(.bottom, 60)
         }
     }
 }
@@ -170,64 +179,63 @@ private struct OnboardingPage {
         let systemImage: String
     }
 
+    let eyebrow: String
     let title: String
     let detail: String
     let systemImage: String
+    let floatingSymbol: String
     let tint: Color
+    let gradient: LinearGradient
     let highlights: [Highlight]
 
     static let all: [OnboardingPage] = [
         OnboardingPage(
-            title: "Know what’s still coming",
-            detail: "Keep every expected refund, amount, and due date together.",
-            systemImage: "arrow.uturn.backward.circle.fill",
-            tint: .blue,
+            eyebrow: "Delightfully simple",
+            title: "Refunds, minus the spreadsheet",
+            detail: "Merchant, amount, and shipped date. That’s all it takes.",
+            systemImage: "arrow.uturn.backward",
+            floatingSymbol: "dollarsign",
+            tint: RefundTheme.violet,
+            gradient: LinearGradient(
+                colors: [RefundTheme.violet, RefundTheme.blue],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
             highlights: [
                 Highlight(
-                    title: "A clear money snapshot",
-                    detail: "See how much is outstanding at a glance.",
-                    systemImage: "dollarsign.circle"
+                    title: "Add one in seconds",
+                    detail: "No order numbers, tracking codes, or busy forms.",
+                    systemImage: "bolt.fill"
                 ),
                 Highlight(
-                    title: "Every return in one place",
-                    detail: "Save tracking, dates, notes, and receipts.",
-                    systemImage: "tray.full"
+                    title: "Your currency is remembered",
+                    detail: "Set it once and keep moving.",
+                    systemImage: "coloncurrencysign.circle"
                 )
             ]
         ),
         OnboardingPage(
-            title: "Catch late refunds early",
-            detail: "Expected dates turn into a focused follow-up list automatically.",
-            systemImage: "calendar.badge.exclamationmark",
-            tint: .orange,
+            eyebrow: "A tiny money radar",
+            title: "Know what’s coming back",
+            detail: "We estimate the date, surface anything late, and celebrate when it lands.",
+            systemImage: "sparkles",
+            floatingSymbol: "checkmark",
+            tint: RefundTheme.mint,
+            gradient: LinearGradient(
+                colors: [RefundTheme.mint, RefundTheme.blue],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
             highlights: [
                 Highlight(
-                    title: "Automatic overdue status",
-                    detail: "Know exactly when a retailer misses its date.",
-                    systemImage: "exclamationmark.triangle"
+                    title: "Dates happen automatically",
+                    detail: "Your expected refund date is calculated for you.",
+                    systemImage: "calendar.badge.clock"
                 ),
                 Highlight(
-                    title: "Gentle reminders",
-                    detail: "Choose when to be reminded before and after a due date.",
-                    systemImage: "bell.badge"
-                )
-            ]
-        ),
-        OnboardingPage(
-            title: "Calm, private tracking",
-            detail: "Your refund records stay locally on this device.",
-            systemImage: "lock.shield.fill",
-            tint: .green,
-            highlights: [
-                Highlight(
-                    title: "No account required",
-                    detail: "Start immediately without a login or subscription.",
-                    systemImage: "person.crop.circle.badge.checkmark"
-                ),
-                Highlight(
-                    title: "Your data is portable",
-                    detail: "Export a CSV whenever you need a copy.",
-                    systemImage: "square.and.arrow.up"
+                    title: "Late refunds stand out",
+                    detail: "One glance tells you what needs a nudge.",
+                    systemImage: "eyes"
                 )
             ]
         )

@@ -3,11 +3,8 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 71;
 	objects = {
-
-/* Begin PBXBuildFile section */
-/* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		AA0000000000000000000060 /* PBXContainerItemProxy */ = {
@@ -33,21 +30,9 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AA0000000000000000000010 /* RefundTracker */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = RefundTracker;
-			sourceTree = "<group>";
-		};
-		AA0000000000000000000011 /* RefundTrackerTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = RefundTrackerTests;
-			sourceTree = "<group>";
-		};
-		AA0000000000000000000012 /* RefundTrackerUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = RefundTrackerUITests;
-			sourceTree = "<group>";
-		};
+		AA0000000000000000000010 /* RefundTracker */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = RefundTracker; sourceTree = "<group>"; };
+		AA0000000000000000000011 /* RefundTrackerTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = RefundTrackerTests; sourceTree = "<group>"; };
+		AA0000000000000000000012 /* RefundTrackerUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = RefundTrackerUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -199,7 +184,6 @@
 			);
 			mainGroup = AA0000000000000000000002;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = AA0000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";

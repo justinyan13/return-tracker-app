@@ -10,43 +10,76 @@ struct RefundWorkflowEmptyState: View {
     var addAction: (() -> Void)?
 
     var body: some View {
-        ContentUnavailableView {
-            Label(title, systemImage: symbolName)
-        } description: {
+        VStack(spacing: 18) {
+            Image(systemName: symbolName)
+                .font(.system(size: 42, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.white)
+                .frame(width: 94, height: 94)
+                .background(
+                    LinearGradient(
+                        colors: tintColors,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+                )
+                .shadow(color: tintColors[0].opacity(0.25), radius: 18, y: 11)
+
+            Text(title)
+                .font(.title2.bold())
+                .multilineTextAlignment(.center)
+
             Text(message)
-        } actions: {
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
             if let addAction, kind == .firstRefund {
-                Button("Track a refund", systemImage: "plus", action: addAction)
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("emptyStateAddRefundButton")
+                Button(action: addAction) {
+                    Label("Track a refund", systemImage: "plus")
+                }
+                .buttonStyle(RefundPrimaryButtonStyle())
+                .accessibilityIdentifier("emptyStateAddRefundButton")
             }
         }
+        .refundGlassCard(tint: tintColors[0], padding: 24)
+        .padding(20)
     }
 
     private var title: String {
         switch kind {
         case .firstRefund:
-            "Never lose track of a refund"
+            "Your money radar is empty"
         case .noResults:
-            "No matching refunds"
+            "Nothing hiding here"
         }
     }
 
     private var message: String {
         switch kind {
         case .firstRefund:
-            "Add a return and Refund Tracker will keep its expected date, status, and follow-up details together."
+            "Add a merchant and amount. We’ll take care of the dates and keep watch."
         case .noResults:
-            "Try changing your search, filters, or date range."
+            "Try a different search or loosen the filters."
         }
     }
 
     private var symbolName: String {
         switch kind {
         case .firstRefund:
-            "arrow.uturn.backward.circle"
+            "arrow.uturn.backward"
         case .noResults:
-            "line.3.horizontal.decrease.circle"
+            "binoculars.fill"
+        }
+    }
+
+    private var tintColors: [Color] {
+        switch kind {
+        case .firstRefund:
+            [RefundTheme.violet, RefundTheme.blue]
+        case .noResults:
+            [RefundTheme.mango, RefundTheme.coral]
         }
     }
 }

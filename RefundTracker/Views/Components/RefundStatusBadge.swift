@@ -4,14 +4,37 @@ struct RefundStatusBadge: View {
     let status: RefundStatus
 
     var body: some View {
-        Label(status.title, systemImage: status.symbolName)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(status.foregroundColor)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(status.backgroundColor, in: Capsule())
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Status: \(status.title)")
+        Label {
+            Text(compactTitle)
+                .lineLimit(1)
+        } icon: {
+            Image(systemName: status.symbolName)
+                .font(.caption2.weight(.heavy))
+        }
+        .font(.caption2.weight(.heavy))
+        .foregroundStyle(status.foregroundColor)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(status.backgroundColor, in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(status.badgeTint.opacity(0.24), lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Status: \(status.title)")
+    }
+
+    private var compactTitle: String {
+        switch status {
+        case .deliveredToRetailer:
+            "Delivered"
+        case .preparingReturn:
+            "Preparing"
+        case .refundPending:
+            "Pending"
+        default:
+            status.title
+        }
     }
 }
 
@@ -35,11 +58,26 @@ extension RefundStatus {
         case .cancelled:
             .secondary
         case .preparingReturn, .shipped, .deliveredToRetailer, .refundPending:
-            .blue
+            RefundTheme.violet
         }
     }
 
     var backgroundColor: Color {
-        foregroundColor.opacity(0.13)
+        badgeTint.opacity(0.13)
+    }
+
+    var badgeTint: Color {
+        switch self {
+        case .refunded:
+            RefundTheme.mint
+        case .overdue:
+            RefundTheme.coral
+        case .disputed:
+            RefundTheme.mango
+        case .cancelled:
+            .secondary
+        case .preparingReturn, .shipped, .deliveredToRetailer, .refundPending:
+            RefundTheme.violet
+        }
     }
 }

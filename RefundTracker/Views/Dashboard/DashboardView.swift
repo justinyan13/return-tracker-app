@@ -4,6 +4,7 @@ import UIKit
 
 struct DashboardView: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Refund.expectedRefundDate) private var refunds: [Refund]
 
@@ -17,7 +18,9 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
+                RefundBackdrop()
+
                 if refunds.isEmpty {
                     DashboardEmptyState(onAddRefund: onAddRefund)
                 } else {
@@ -25,6 +28,7 @@ struct DashboardView: View {
                 }
             }
             .navigationTitle("Dashboard")
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: onAddRefund) {
@@ -73,228 +77,78 @@ struct DashboardView: View {
 
     private var dashboard: some View {
         let metrics = viewModel.metrics(for: refunds)
+        let stream = returnsStream(at: viewModel.referenceDate)
+        let preferredCurrency = settings.defaultCurrencyCode.uppercased()
+        let primaryCurrency = metrics.awaitingAmountsByCurrency[preferredCurrency] != nil
+            ? preferredCurrency
+            : metrics.awaitingAmountsByCurrency.keys.sorted().first
+                ?? preferredCurrency
 
         return ScrollView {
-            LazyVStack(spacing: 20) {
-                AwaitingRefundCard(
-                    amount: metrics.awaitingAmountsByCurrency[
-                        settings.defaultCurrencyCode
-                    ] ?? 0,
-                    currencyCode: settings.defaultCurrencyCode,
+            LazyVStack(alignment: .leading, spacing: 18) {
+                MoneyComingBackHero(
+                    amount: metrics.awaitingAmountsByCurrency[primaryCurrency] ?? 0,
+                    currencyCode: primaryCurrency,
                     otherAmounts: metrics.awaitingAmountsByCurrency.filter {
                         $0.key.caseInsensitiveCompare(
-                            settings.defaultCurrencyCode
+                            primaryCurrency
                         ) != .orderedSame
-                    }
+                    },
+                    openCount: metrics.openReturnCount,
+                    overdueCount: metrics.overdueRefundCount,
+                    refundedCount: metrics.completedThisMonthCount
                 )
 
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12)
-                    ],
-                    spacing: 12
-                ) {
-                    DashboardMetricCard(
-                        title: "Open returns",
-                        value: metrics.openReturnCount.formatted(),
-                        systemImage: "shippingbox",
-                        tint: .blue
-                    )
-                    DashboardMetricCard(
-                        title: "Overdue",
-                        value: metrics.overdueRefundCount.formatted(),
-                        systemImage: "exclamationmark.triangle.fill",
-                        tint: metrics.overdueRefundCount == 0 ? .green : .red
-                    )
-                    DashboardMetricCard(
-                        title: "Refunded this month",
-                        value: metrics.completedThisMonthCount.formatted(),
-                        systemImage: "checkmark.circle.fill",
-                        tint: .green
-                    )
-                }
-
-                DashboardRefundSection(
-                    title: "Needs attention",
-                    subtitle: "Late or disputed refunds",
-                    refunds: metrics.attentionRefunds,
-                    emptyTitle: "Nothing needs attention",
-                    emptySystemImage: "checkmark.shield.fill",
-                    referenceDate: viewModel.referenceDate
+                RefundSectionHeading(
+                    title: "Returns in motion",
+                    subtitle: stream.isEmpty
+                        ? "Your refund queue is clear"
+                        : "Overdue first, then what’s coming back",
+                    symbol: "arrow.uturn.backward.circle.fill"
                 )
+                .padding(.horizontal, 4)
 
-                DashboardRefundSection(
-                    title: "Coming up",
-                    subtitle: "Expected in the next two weeks",
-                    refunds: metrics.upcomingRefunds,
-                    emptyTitle: "No refunds due soon",
-                    emptySystemImage: "calendar.badge.checkmark",
-                    referenceDate: viewModel.referenceDate
-                )
-            }
-            .padding()
-        }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .refreshable {
-            viewModel.refresh()
-        }
-    }
-}
-
-private struct AwaitingRefundCard: View {
-    let amount: Decimal
-    let currencyCode: String
-    let otherAmounts: [String: Decimal]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Awaiting refund", systemImage: "clock.arrow.circlepath")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.88))
-
-            Text(amount, format: .currency(code: currencyCode))
-                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                .foregroundStyle(.white)
-                .monospacedDigit()
-                .minimumScaleFactor(0.65)
-                .lineLimit(1)
-
-            Text("Open returns recorded in \(currencyCode)")
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.78))
-
-            if !otherAmounts.isEmpty {
-                Divider()
-                    .overlay(.white.opacity(0.28))
-
-                Text(otherAmountsDescription)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.88))
-                    .lineLimit(2)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background {
-            LinearGradient(
-                colors: [Color.accentColor, Color.accentColor.opacity(0.72)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            accessibilityDescription
-        )
-    }
-
-    private var otherAmountsDescription: String {
-        let sorted = otherAmounts.sorted { $0.key < $1.key }
-        let displayed = sorted.prefix(2).map { code, amount in
-            "\(amount.formatted(.currency(code: code))) \(code)"
-        }
-        let remainingCount = sorted.count - displayed.count
-        let suffix = remainingCount > 0 ? " and \(remainingCount) more" : ""
-        return "Also waiting: \(displayed.joined(separator: " · "))\(suffix)"
-    }
-
-    private var accessibilityDescription: String {
-        let primary = "Total awaiting refund in \(currencyCode): \(amount.formatted(.currency(code: currencyCode)))"
-        guard !otherAmounts.isEmpty else { return primary }
-        return "\(primary). \(otherAmountsDescription)"
-    }
-}
-
-private struct DashboardMetricCard: View {
-    let title: String
-    let value: String
-    let systemImage: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: systemImage)
-                .font(.title3)
-                .foregroundStyle(tint)
-                .accessibilityHidden(true)
-
-            Text(value)
-                .font(.title2.bold())
-                .monospacedDigit()
-
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-        .padding(16)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title): \(value)")
-    }
-}
-
-private struct DashboardRefundSection: View {
-    @Environment(AppSettings.self) private var settings
-    @Environment(\.modelContext) private var modelContext
-
-    let title: String
-    let subtitle: String
-    let refunds: [Refund]
-    let emptyTitle: String
-    let emptySystemImage: String
-    let referenceDate: Date
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.title3.bold())
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if refunds.isEmpty {
-                Label(emptyTitle, systemImage: emptySystemImage)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .accessibilityLabel(emptyTitle)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(refunds) { refund in
+                if stream.isEmpty {
+                    DashboardAllCaughtUpCard()
+                } else {
+                    ForEach(stream) { refund in
                         NavigationLink {
                             RefundDetailView(
                                 refund: refund,
                                 deleteRecord: deleteRecord
                             )
-                                .environment(settings)
+                            .environment(settings)
                         } label: {
-                            DashboardRefundRow(
+                            RefundRowView(
                                 refund: refund,
-                                referenceDate: referenceDate
+                                referenceDate: viewModel.referenceDate
                             )
                         }
                         .buttonStyle(.plain)
-
-                        if refund.id != refunds.last?.id {
-                            Divider()
-                                .padding(.leading, 16)
-                        }
                     }
                 }
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 28)
         }
+        .refreshable {
+            viewModel.refresh()
+        }
+    }
+
+    private func returnsStream(at date: Date) -> [Refund] {
+        refunds
+            .filter {
+                $0.effectiveStatus(on: date, calendar: .current).isOpen
+            }
+            .sorted { lhs, rhs in
+                let lhsStatus = lhs.effectiveStatus(on: date, calendar: .current)
+                let rhsStatus = rhs.effectiveStatus(on: date, calendar: .current)
+                if lhsStatus.sortOrder != rhsStatus.sortOrder {
+                    return lhsStatus.sortOrder < rhsStatus.sortOrder
+                }
+                return lhs.expectedRefundDate < rhs.expectedRefundDate
+            }
     }
 
     private func deleteRecord(_ refund: Refund) throws {
@@ -309,72 +163,201 @@ private struct DashboardRefundSection: View {
     }
 }
 
-private struct DashboardRefundRow: View {
-    let refund: Refund
-    let referenceDate: Date
-
-    private var effectiveStatus: RefundStatus {
-        refund.effectiveStatus(on: referenceDate, calendar: .current)
-    }
+private struct MoneyComingBackHero: View {
+    let amount: Decimal
+    let currencyCode: String
+    let otherAmounts: [String: Decimal]
+    let openCount: Int
+    let overdueCount: Int
+    let refundedCount: Int
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(refund.retailerName)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("MONEY COMING BACK")
+                        .font(.caption.weight(.heavy))
+                        .tracking(1.2)
+                        .foregroundStyle(RefundTheme.violet)
 
-                Text(refund.itemName)
-                    .font(.subheadline)
+                    Text(amount, format: .currency(code: currencyCode))
+                        .font(.system(.largeTitle, design: .rounded, weight: .heavy))
+                        .foregroundStyle(
+                            RefundTheme.gradient(for: "money coming back")
+                        )
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.62)
+
+                    Text(heroMessage)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 4)
+
+                MoneyReturnGlyph()
+            }
+
+            if !otherAmounts.isEmpty {
+                Text(otherAmountsDescription)
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Label(expectedDateDescription, systemImage: "calendar")
-                    .font(.caption)
-                    .foregroundStyle(effectiveStatus == .overdue ? .red : .secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(.thinMaterial, in: Capsule())
             }
 
-            Spacer(minLength: 8)
+            Divider()
+                .overlay(RefundTheme.violet.opacity(0.16))
 
-            VStack(alignment: .trailing, spacing: 7) {
-                RefundAmountLabel(
-                    amount: refund.refundAmount,
-                    currencyCode: refund.currencyCode,
-                    style: .subheadline.weight(.semibold)
+            HStack(spacing: 0) {
+                DashboardSignal(
+                    value: openCount,
+                    label: "Open",
+                    systemImage: "shippingbox.fill",
+                    tint: RefundTheme.blue
                 )
-                RefundStatusBadge(status: effectiveStatus)
-            }
 
-            Image(systemName: "chevron.right")
-                .font(.caption.bold())
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
+                SignalDivider()
+
+                DashboardSignal(
+                    value: overdueCount,
+                    label: "Overdue",
+                    systemImage: "exclamationmark.circle.fill",
+                    tint: overdueCount == 0
+                        ? RefundTheme.mint
+                        : RefundTheme.coral
+                )
+
+                SignalDivider()
+
+                DashboardSignal(
+                    value: refundedCount,
+                    label: "Refunded",
+                    systemImage: "checkmark.circle.fill",
+                    tint: RefundTheme.mint
+                )
+            }
         }
-        .padding(16)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens refund details")
+        .refundGlassCard(tint: RefundTheme.violet, padding: 20)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(
+            "Money coming back: \(amount.formatted(.currency(code: currencyCode))). \(heroMessage)"
+        )
     }
 
-    private var expectedDateDescription: String {
-        let calendar = Calendar.current
-        let expected = calendar.startOfDay(for: refund.expectedRefundDate)
-        let today = calendar.startOfDay(for: referenceDate)
-        let days = calendar.dateComponents([.day], from: today, to: expected).day ?? 0
-
-        switch days {
-        case ..<(-1):
-            return "\(abs(days)) days overdue"
-        case -1:
-            return "1 day overdue"
-        case 0:
-            return "Expected today"
-        case 1:
-            return "Expected tomorrow"
-        default:
-            return "Expected \(expected.formatted(date: .abbreviated, time: .omitted))"
+    private var heroMessage: String {
+        if openCount == 0 {
+            return "Everything has made its way home."
         }
+        if overdueCount > 0 {
+            return "\(overdueCount) \(overdueCount == 1 ? "refund needs" : "refunds need") a friendly nudge."
+        }
+        return "\(openCount) \(openCount == 1 ? "refund is" : "refunds are") on the way."
+    }
+
+    private var otherAmountsDescription: String {
+        let sorted = otherAmounts.sorted { $0.key < $1.key }
+        let displayed = sorted.prefix(2).map { code, amount in
+            "\(amount.formatted(.currency(code: code))) \(code)"
+        }
+        let remainder = sorted.count - displayed.count
+        let suffix = remainder > 0 ? " +\(remainder) more" : ""
+        return "Also returning · \(displayed.joined(separator: " · "))\(suffix)"
+    }
+}
+
+private struct MoneyReturnGlyph: View {
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            RefundTheme.mint.opacity(0.24),
+                            RefundTheme.blue.opacity(0.14)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 66, height: 66)
+
+            Image(systemName: "banknote.fill")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(RefundTheme.mint)
+                .frame(width: 66, height: 66)
+
+            Image(systemName: "arrow.uturn.backward.circle.fill")
+                .font(.title3)
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, RefundTheme.violet)
+                .background(.white, in: Circle())
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct DashboardSignal: View {
+    let value: Int
+    let label: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        VStack(spacing: 5) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+
+                Text(value.formatted())
+                    .font(.headline.weight(.heavy))
+                    .monospacedDigit()
+            }
+
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(value)")
+    }
+}
+
+private struct SignalDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(RefundTheme.violet.opacity(0.13))
+            .frame(width: 1, height: 34)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct DashboardAllCaughtUpCard: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "sparkles")
+                .font(.title2.weight(.bold))
+                .foregroundStyle(RefundTheme.mint)
+                .frame(width: 48, height: 48)
+                .background(RefundTheme.mint.opacity(0.13), in: Circle())
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("All caught up")
+                    .font(.headline)
+                Text("No open returns need your attention.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .refundGlassCard(tint: RefundTheme.mint, padding: 16)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -382,19 +365,48 @@ private struct DashboardEmptyState: View {
     let onAddRefund: () -> Void
 
     var body: some View {
-        ContentUnavailableView {
-            Label("Never lose track of a refund", systemImage: "arrow.uturn.backward.circle.fill")
-        } description: {
-            Text(
-                "Add a return once, and Refund Tracker will keep expected dates, amounts, and follow-ups in one calm place."
-            )
-        } actions: {
-            Button(action: onAddRefund) {
-                Label("Track your first refund", systemImage: "plus")
+        ScrollView {
+            VStack(spacing: 22) {
+                ZStack(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(RefundTheme.gradient(for: "first refund"))
+                        .frame(width: 104, height: 104)
+
+                    Image(systemName: "banknote.fill")
+                        .font(.system(size: 42, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 104, height: 104)
+
+                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                        .font(.largeTitle)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, RefundTheme.mint)
+                        .background(.white, in: Circle())
+                }
+                .accessibilityHidden(true)
+
+                VStack(spacing: 9) {
+                    Text("Bring your money back")
+                        .font(.system(.title, design: .rounded, weight: .heavy))
+                        .multilineTextAlignment(.center)
+
+                    Text(
+                        "Add a return once. We’ll keep the amount, expected date, and next nudge easy to spot."
+                    )
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                }
+
+                Button(action: onAddRefund) {
+                    Label("Track my first refund", systemImage: "plus")
+                }
+                .buttonStyle(RefundPrimaryButtonStyle())
+                .accessibilityIdentifier("dashboard.empty.addRefund")
             }
-            .buttonStyle(.borderedProminent)
-            .accessibilityIdentifier("dashboard.empty.addRefund")
+            .refundGlassCard(tint: RefundTheme.violet, padding: 24)
+            .padding(.horizontal, 20)
+            .padding(.top, 36)
         }
-        .padding()
     }
 }

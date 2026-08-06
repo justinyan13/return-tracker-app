@@ -2,72 +2,123 @@ import SwiftUI
 
 struct RefundRowView: View {
     let refund: Refund
+    var referenceDate: Date
+
+    init(refund: Refund, referenceDate: Date = .now) {
+        self.refund = refund
+        self.referenceDate = referenceDate
+    }
 
     private var status: RefundStatus {
-        refund.effectiveStatus(on: .now, calendar: .current)
+        refund.effectiveStatus(on: referenceDate, calendar: .current)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
+        HStack(alignment: .center, spacing: 13) {
+            MerchantMark(name: refund.retailerName, size: 50)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(refund.retailerName)
-                        .font(.headline)
+                        .font(.headline.weight(.bold))
                         .foregroundStyle(.primary)
-                    Text(refund.itemName)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 4)
+
+                    RefundAmountLabel(
+                        amount: refund.refundAmount,
+                        currencyCode: refund.currencyCode,
+                        style: .headline.weight(.heavy)
+                    )
                 }
 
-                Spacer(minLength: 8)
+                HStack(spacing: 8) {
+                    Label(dateText, systemImage: dateSymbol)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(dateColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
 
-                RefundAmountLabel(
-                    amount: refund.refundAmount,
-                    currencyCode: refund.currencyCode
-                )
-            }
+                    Spacer(minLength: 2)
 
-            HStack(spacing: 8) {
-                RefundStatusBadge(status: status)
-
-                Spacer(minLength: 4)
-
-                Label(expectedDateText, systemImage: expectedDateSymbol)
-                    .font(.caption)
-                    .foregroundStyle(status == .overdue ? .red : .secondary)
-                    .fontWeight(status == .overdue ? .semibold : .regular)
+                    RefundStatusBadge(status: status)
+                        .layoutPriority(1)
+                }
             }
         }
-        .padding(.vertical, 5)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .refundGlassCard(
+            tint: RefundTheme.color(for: refund.retailerName),
+            padding: 14
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySummary)
+        .accessibilityHint("Opens refund details")
     }
 
-    private var expectedDateText: String {
-        if status == .refunded, let date = refund.actualRefundDate {
-            return "Received \(date.formatted(date: .abbreviated, time: .omitted))"
-        }
-        if status == .overdue {
-            return "Due \(refund.expectedRefundDate.formatted(date: .abbreviated, time: .omitted))"
-        }
-        return "Expected \(refund.expectedRefundDate.formatted(date: .abbreviated, time: .omitted))"
-    }
-
-    private var expectedDateSymbol: String {
+    private var dateText: String {
         switch status {
+        case .shipped:
+            if let shippedDate = refund.shippedDate {
+                return "Shipped \(shortDate(shippedDate)) · due \(shortDate(refund.expectedRefundDate))"
+            }
+            return "Expected \(shortDate(refund.expectedRefundDate))"
+        case .deliveredToRetailer:
+            if let receivedDate = refund.retailerReceivedDate {
+                return "Delivered \(shortDate(receivedDate)) · due \(shortDate(refund.expectedRefundDate))"
+            }
+            return "Expected \(shortDate(refund.expectedRefundDate))"
+        case .refunded:
+            if let actualDate = refund.actualRefundDate {
+                return "Refunded \(shortDate(actualDate))"
+            }
+            return "Refund received"
+        case .overdue:
+            return "Expected \(shortDate(refund.expectedRefundDate))"
+        case .preparingReturn, .refundPending, .disputed, .cancelled:
+            return "Expected \(shortDate(refund.expectedRefundDate))"
+        }
+    }
+
+    private var dateSymbol: String {
+        switch status {
+        case .shipped:
+            "shippingbox.fill"
+        case .deliveredToRetailer:
+            "checkmark.circle.fill"
+        case .refunded:
+            "arrow.down.circle.fill"
         case .overdue:
             "exclamationmark.circle.fill"
-        case .refunded:
-            "checkmark.circle"
-        default:
+        case .preparingReturn, .refundPending, .disputed, .cancelled:
             "calendar"
         }
     }
 
+    private var dateColor: Color {
+        switch status {
+        case .overdue:
+            .red
+        case .refunded:
+            .green
+        case .disputed:
+            .orange
+        case .preparingReturn, .shipped, .deliveredToRetailer,
+             .refundPending, .cancelled:
+            .secondary
+        }
+    }
+
+    private func shortDate(_ date: Date) -> String {
+        date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
     private var accessibilitySummary: String {
-        let amount = refund.refundAmount.formatted(.currency(code: refund.currencyCode))
-        return "\(refund.retailerName), \(refund.itemName), \(amount), \(status.title), \(expectedDateText)"
+        let amount = refund.refundAmount.formatted(
+            .currency(code: refund.currencyCode)
+        )
+        return "\(refund.retailerName), \(amount), \(status.title), \(dateText)"
     }
 }

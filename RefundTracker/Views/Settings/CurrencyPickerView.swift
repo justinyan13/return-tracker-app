@@ -69,6 +69,9 @@ struct CurrencyPickerView: View {
                 "\(currencyName(for: code)), \(code)\(selection == code ? ", selected" : "")"
             )
         }
+        .scrollContentBackground(.hidden)
+        .background(RefundBackdrop())
+        .tint(RefundTheme.violet)
         .navigationTitle("Default Currency")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Currency or code")

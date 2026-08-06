@@ -10,6 +10,7 @@ struct RefundDetailView: View {
     @State private var isEditing = false
     @State private var isEditingTracking = false
     @State private var isEditingNotes = false
+    @State private var isShowingMoreDetails = false
     @State private var pendingConfirmation: Confirmation?
     @State private var isConfirmingDelete = false
     @State private var errorMessage: String?
@@ -48,60 +49,36 @@ struct RefundDetailView: View {
     }
 
     var body: some View {
-        List {
-            heroSection
+        ZStack {
+            RefundBackdrop()
 
-            if effectiveStatus.isOpen {
-                actionsSection
-            }
+            ScrollView {
+                LazyVStack(spacing: 18) {
+                    heroCard
+                    keyDatesCard
 
-            detailsSection
+                    if effectiveStatus.isOpen {
+                        actionsCard
+                    }
 
-            if hasShippingDetails {
-                shippingSection
-            }
-
-            timelineSection
-            notesSection
-            attachmentsSection
-            Section {
-                Button("Delete refund", systemImage: "trash", role: .destructive) {
-                    isConfirmingDelete = true
+                    timelineCard
+                    moreDetailsCard
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 36)
             }
-
-            Section {
-                Text("Last updated \(refund.lastUpdatedDate.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .listRowBackground(Color.clear)
-            }
+            .scrollIndicators(.hidden)
         }
-        .navigationTitle(refund.retailerName)
+        .navigationTitle("Refund")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Edit") {
                     isEditing = true
                 }
                 .accessibilityIdentifier("editRefundButton")
-            }
 
-            if effectiveStatus != .cancelled && effectiveStatus != .refunded {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Cancel return", systemImage: "xmark.circle") {
-                            pendingConfirmation = .cancel
-                        }
-                    } label: {
-                        Label("More", systemImage: "ellipsis.circle")
-                    }
-                    .accessibilityIdentifier("refundDetailMoreButton")
-                }
-            }
-
-            ToolbarItem(placement: .topBarTrailing) {
                 Button(role: .destructive) {
                     isConfirmingDelete = true
                 } label: {
@@ -113,6 +90,7 @@ struct RefundDetailView: View {
         .sheet(isPresented: $isEditing) {
             RefundFormView(refund: refund)
                 .environment(settings)
+                .presentationCornerRadius(32)
         }
         .sheet(isPresented: $isEditingTracking) {
             RefundTrackingEditor(
@@ -159,221 +137,356 @@ struct RefundDetailView: View {
         }
     }
 
-    private var heroSection: some View {
-        Section {
-            VStack(spacing: 10) {
-                Text(refund.itemName)
-                    .font(.title3.weight(.semibold))
-                    .multilineTextAlignment(.center)
+    private var heroCard: some View {
+        VStack(spacing: 20) {
+            HStack(spacing: 14) {
+                MerchantMark(name: refund.retailerName, size: 62)
+
+                Text(refund.retailerName)
+                    .font(.title2.weight(.bold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+
+                Spacer(minLength: 8)
+            }
+
+            VStack(spacing: 9) {
+                Text("Refund amount")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.7)
 
                 RefundAmountLabel(
                     amount: refund.refundAmount,
                     currencyCode: refund.currencyCode,
-                    style: .largeTitle.weight(.bold)
+                    style: .system(.largeTitle, design: .rounded, weight: .bold)
                 )
 
                 RefundStatusBadge(status: effectiveStatus)
-
-                Text(expectedSummary)
-                    .font(.subheadline)
-                    .foregroundStyle(effectiveStatus == .overdue ? .red : .secondary)
-                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
         }
-        .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets())
+        .refundGlassCard(
+            tint: RefundTheme.color(for: refund.retailerName),
+            padding: 22
+        )
+        .accessibilityElement(children: .contain)
     }
 
-    private var actionsSection: some View {
-        Section("Actions") {
+    private var keyDatesCard: some View {
+        HStack(alignment: .top, spacing: 16) {
+            if let shippedDate = refund.shippedDate {
+                RefundDateSignal(
+                    title: "Shipped",
+                    date: shippedDate,
+                    caption: "Return sent",
+                    symbolName: "truck.box.fill",
+                    tint: RefundTheme.blue
+                )
+
+                Divider()
+                    .frame(height: 72)
+            }
+
+            RefundDateSignal(
+                title: "Expected",
+                date: refund.expectedRefundDate,
+                caption: expectedDateCaption,
+                symbolName: effectiveStatus == .overdue
+                    ? "exclamationmark.calendar.fill"
+                    : "calendar.badge.clock",
+                tint: statusTint
+            )
+        }
+        .refundGlassCard(tint: statusTint)
+    }
+
+    private var timelineCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            RefundSectionHeading(
+                title: "Timeline",
+                subtitle: "The milestones that matter",
+                symbol: "clock"
+            )
+
+            RefundTimelineView(refund: refund)
+        }
+        .refundGlassCard(tint: RefundTheme.blue)
+    }
+
+    private var actionsCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            RefundSectionHeading(
+                title: "Update refund",
+                subtitle: "Keep this record current",
+                symbol: "checkmark.circle"
+            )
+
+            Button {
+                persist { refund.markRefunded() }
+            } label: {
+                Label("Mark refund received", systemImage: "checkmark.seal.fill")
+            }
+            .buttonStyle(RefundPrimaryButtonStyle())
+            .accessibilityIdentifier("markRefundReceivedButton")
+
             LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 10),
-                    GridItem(.flexible(), spacing: 10)
-                ],
+                columns: [GridItem(.adaptive(minimum: 130), spacing: 10)],
                 spacing: 10
             ) {
                 if let workflowAction {
-                    RefundDetailActionButton(
-                        title: workflowAction.title,
-                        symbolName: workflowAction.symbol
-                    ) {
+                    Button {
                         workflowAction.perform()
+                    } label: {
+                        RefundCompactActionLabel(
+                            title: workflowAction.title,
+                            symbolName: workflowAction.symbol
+                        )
                     }
+                    .buttonStyle(.bordered)
+                    .tint(RefundTheme.blue)
                 }
-
-                RefundDetailActionButton(
-                    title: "Mark received",
-                    symbolName: "checkmark.circle",
-                    tint: .green
-                ) {
-                    persist { refund.markRefunded() }
-                }
-                .accessibilityIdentifier("markRefundReceivedButton")
 
                 if effectiveStatus != .disputed {
-                    RefundDetailActionButton(
-                        title: "Dispute",
-                        symbolName: "exclamationmark.bubble",
-                        tint: .orange
-                    ) {
+                    Button {
                         pendingConfirmation = .markDisputed
+                    } label: {
+                        RefundCompactActionLabel(
+                            title: "Dispute",
+                            symbolName: "exclamationmark.bubble"
+                        )
                     }
+                    .buttonStyle(.bordered)
+                    .tint(RefundTheme.mango)
                     .accessibilityIdentifier("markRefundDisputedButton")
                 }
 
-                RefundDetailActionButton(
-                    title: refund.trackingNumber.isEmpty ? "Add tracking" : "Edit tracking",
-                    symbolName: "number"
-                ) {
-                    isEditingTracking = true
+                Button(role: .destructive) {
+                    pendingConfirmation = .cancel
+                } label: {
+                    RefundCompactActionLabel(
+                        title: "Cancel return",
+                        symbolName: "xmark.circle"
+                    )
                 }
-                .accessibilityIdentifier("editTrackingButton")
+                .buttonStyle(.bordered)
+                .tint(RefundTheme.coral)
             }
-            .padding(.vertical, 4)
         }
+        .refundGlassCard(tint: statusTint)
     }
 
-    private var detailsSection: some View {
-        Section("Refund details") {
-            if !refund.orderNumber.isEmpty {
-                RefundInfoRow("Order number", symbol: "number") {
-                    Text(refund.orderNumber)
-                        .textSelection(.enabled)
+    private var moreDetailsCard: some View {
+        DisclosureGroup(isExpanded: $isShowingMoreDetails) {
+            VStack(alignment: .leading, spacing: 18) {
+                Divider()
+
+                detailsRows
+
+                Divider()
+
+                HStack(spacing: 10) {
+                    Button {
+                        isEditingTracking = true
+                    } label: {
+                        Label(
+                            refund.trackingNumber.isEmpty
+                                ? "Add tracking"
+                                : "Edit tracking",
+                            systemImage: "number"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("editTrackingButton")
+
+                    Button {
+                        isEditingNotes = true
+                    } label: {
+                        Label(
+                            refund.notes.isEmpty ? "Add notes" : "Edit notes",
+                            systemImage: "note.text"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("editRefundNotesButton")
                 }
-            }
 
-            RefundInfoRow("Method", symbol: refund.refundMethod.iconName) {
-                Text(refund.refundMethod.displayName)
-            }
+                if !refund.notes.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Notes", systemImage: "text.quote")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
 
-            if let purchaseDate = refund.purchaseDate {
-                RefundInfoRow("Purchased", symbol: "bag") {
-                    Text(purchaseDate, format: .dateTime.month(.abbreviated).day().year())
+                        Text(refund.notes)
+                            .font(.subheadline)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }
 
-            RefundInfoRow("Returned", symbol: "arrow.uturn.backward") {
-                Text(refund.returnDate, format: .dateTime.month(.abbreviated).day().year())
-            }
+                Divider()
+                attachmentsDetails
 
-            RefundInfoRow("Expected", symbol: "calendar") {
                 Text(
-                    refund.expectedRefundDate,
-                    format: .dateTime.month(.abbreviated).day().year()
+                    "Last updated \(refund.lastUpdatedDate.formatted(date: .abbreviated, time: .shortened))"
                 )
-                .foregroundStyle(effectiveStatus == .overdue ? .red : .primary)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
+            .padding(.top, 8)
+        } label: {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("More details")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
 
-            if let actualDate = refund.actualRefundDate {
-                RefundInfoRow("Received", symbol: "checkmark.circle") {
-                    Text(actualDate, format: .dateTime.month(.abbreviated).day().year())
-                        .foregroundStyle(.green)
+                    Text("Item, order, tracking, notes, and files")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+            } icon: {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(RefundTheme.violet)
             }
         }
+        .tint(RefundTheme.violet)
+        .refundGlassCard(tint: RefundTheme.violet)
     }
 
-    private var shippingSection: some View {
-        Section("Return shipping") {
-            if !refund.returnCarrier.isEmpty {
-                RefundInfoRow("Carrier", symbol: "truck.box") {
-                    Text(refund.returnCarrier)
-                }
-            }
-            if !refund.trackingNumber.isEmpty {
-                RefundInfoRow("Tracking", symbol: "number") {
-                    Text(refund.trackingNumber)
-                        .font(.body.monospaced())
-                        .textSelection(.enabled)
-                }
-            }
-            if let shippedDate = refund.shippedDate {
-                RefundInfoRow("Shipped", symbol: "shippingbox") {
-                    Text(shippedDate, format: .dateTime.month(.abbreviated).day().year())
-                }
-            }
-            if let receivedDate = refund.retailerReceivedDate {
-                RefundInfoRow("Delivered", symbol: "building.2") {
-                    Text(receivedDate, format: .dateTime.month(.abbreviated).day().year())
-                }
-            }
-
-            Button(refund.trackingNumber.isEmpty ? "Add tracking details" : "Update tracking details") {
-                isEditingTracking = true
-            }
+    @ViewBuilder
+    private var detailsRows: some View {
+        RefundInfoRow("Item", symbol: "bag") {
+            Text(refund.itemName)
         }
-    }
 
-    private var timelineSection: some View {
-        Section("Timeline") {
-            RefundTimelineView(refund: refund)
-                .padding(.vertical, 4)
-        }
-    }
-
-    private var notesSection: some View {
-        Section {
-            if refund.notes.isEmpty {
-                Text("Add confirmation details or a record of follow-up conversations.")
-                    .foregroundStyle(.secondary)
-                    .italic()
-            } else {
-                Text(refund.notes)
+        if !refund.orderNumber.isEmpty {
+            RefundInfoRow("Order number", symbol: "number") {
+                Text(refund.orderNumber)
                     .textSelection(.enabled)
             }
+        }
 
-            Button(refund.notes.isEmpty ? "Add notes" : "Edit notes") {
-                isEditingNotes = true
+        RefundInfoRow("Method", symbol: refund.refundMethod.iconName) {
+            Text(refund.refundMethod.displayName)
+        }
+
+        if let purchaseDate = refund.purchaseDate {
+            RefundInfoRow("Purchased", symbol: "cart") {
+                Text(purchaseDate, format: detailDateFormat)
             }
-            .accessibilityIdentifier("editRefundNotesButton")
-        } header: {
-            Text("Notes")
+        }
+
+        RefundInfoRow("Returned", symbol: "arrow.uturn.backward") {
+            Text(refund.returnDate, format: detailDateFormat)
+        }
+
+        if let receivedDate = refund.retailerReceivedDate {
+            RefundInfoRow("Delivered", symbol: "building.2") {
+                Text(receivedDate, format: detailDateFormat)
+            }
+        }
+
+        if let actualDate = refund.actualRefundDate {
+            RefundInfoRow("Refund received", symbol: "checkmark.circle") {
+                Text(actualDate, format: detailDateFormat)
+                    .foregroundStyle(RefundTheme.mint)
+            }
+        }
+
+        if !refund.returnCarrier.isEmpty {
+            RefundInfoRow("Carrier", symbol: "truck.box") {
+                Text(refund.returnCarrier)
+            }
+        }
+
+        if !refund.trackingNumber.isEmpty {
+            RefundInfoRow("Tracking", symbol: "number") {
+                Text(refund.trackingNumber)
+                    .font(.body.monospaced())
+                    .textSelection(.enabled)
+            }
         }
     }
 
-    private var attachmentsSection: some View {
-        Section {
+    private var attachmentsDetails: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Attachments", systemImage: "paperclip")
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+
+                if !sortedAttachments.isEmpty {
+                    Text(sortedAttachments.count, format: .number)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.secondary.opacity(0.1), in: Capsule())
+                }
+            }
+
             RefundAttachmentPicker(
                 onPicked: addAttachment,
                 onError: { errorMessage = $0.localizedDescription }
             )
-            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
 
-            ForEach(sortedAttachments) { attachment in
-                RefundAttachmentRow(
-                    attachment: attachment,
-                    fileURL: attachmentStore.fileURL(for: attachment)
-                )
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button("Delete", systemImage: "trash", role: .destructive) {
-                        pendingConfirmation = .deleteAttachment(attachment.id)
+            if sortedAttachments.isEmpty {
+                Text("Add a receipt, return confirmation, or screenshot.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(sortedAttachments) { attachment in
+                    HStack(spacing: 6) {
+                        RefundAttachmentRow(
+                            attachment: attachment,
+                            fileURL: attachmentStore.fileURL(for: attachment)
+                        )
+                        .frame(maxWidth: .infinity)
+
+                        Button(role: .destructive) {
+                            pendingConfirmation = .deleteAttachment(attachment.id)
+                        } label: {
+                            Image(systemName: "trash")
+                                .frame(width: 38, height: 38)
+                        }
+                        .accessibilityLabel("Delete \(attachment.originalFilename)")
                     }
                 }
             }
-        } header: {
-            Text("Attachments")
-        } footer: {
-            Text("Receipts and screenshots stay on this device.")
+
+            Text("Attachments stay on this device.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
     }
 
-    private var hasShippingDetails: Bool {
-        !refund.trackingNumber.isEmpty
-            || !refund.returnCarrier.isEmpty
-            || refund.shippedDate != nil
-            || refund.retailerReceivedDate != nil
+    private var detailDateFormat: Date.FormatStyle {
+        .dateTime.month(.abbreviated).day().year()
     }
 
-    private var expectedSummary: String {
+    private var statusTint: Color {
         switch effectiveStatus {
         case .refunded:
-            if let actualDate = refund.actualRefundDate {
-                return "Received \(actualDate.formatted(date: .long, time: .omitted))"
-            }
-            return "Refund received"
+            RefundTheme.mint
+        case .overdue:
+            RefundTheme.coral
+        case .disputed:
+            RefundTheme.mango
+        case .cancelled:
+            .gray
+        case .preparingReturn, .shipped, .deliveredToRetailer, .refundPending:
+            RefundTheme.blue
+        }
+    }
+
+    private var expectedDateCaption: String {
+        switch effectiveStatus {
         case .overdue:
             let days = max(
                 Calendar.current.dateComponents(
@@ -383,11 +496,15 @@ struct RefundDetailView: View {
                 ).day ?? 0,
                 1
             )
-            return "\(days) \(days == 1 ? "day" : "days") overdue · expected \(refund.expectedRefundDate.formatted(date: .abbreviated, time: .omitted))"
+            return "\(days) \(days == 1 ? "day" : "days") overdue"
+        case .refunded:
+            return "Refund completed"
         case .cancelled:
-            return "This return is no longer being tracked"
-        default:
-            return "Expected \(refund.expectedRefundDate.formatted(date: .long, time: .omitted))"
+            return "Tracking ended"
+        case .disputed:
+            return "Follow-up in progress"
+        case .preparingReturn, .shipped, .deliveredToRetailer, .refundPending:
+            return "Expected refund date"
         }
     }
 
@@ -561,5 +678,54 @@ struct RefundDetailView: View {
                     "The refund was saved, but reminders couldn’t be updated. \(error.localizedDescription)"
             }
         }
+    }
+}
+
+private struct RefundDateSignal: View {
+    let title: String
+    let date: Date
+    let caption: String
+    let symbolName: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: symbolName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+
+            Text(date, format: .dateTime.month(.abbreviated).day().year())
+                .font(.headline)
+                .monospacedDigit()
+
+            Text(caption)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(title), \(date.formatted(date: .long, time: .omitted)), \(caption)"
+        )
+    }
+}
+
+private struct RefundCompactActionLabel: View {
+    let title: String
+    let symbolName: String
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Image(systemName: symbolName)
+                .font(.body.weight(.semibold))
+                .accessibilityHidden(true)
+
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 48)
     }
 }
