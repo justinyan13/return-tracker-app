@@ -33,12 +33,19 @@ final class RefundListViewModel {
     }
 
     func results(from refunds: [Refund], now: Date = .now) -> [Refund] {
+        // Ordering the bounds here keeps the range usable however the filter
+        // sheet is closed. Swiping it away skips `normalizeDateRange()`, and an
+        // inverted range would otherwise match nothing with no explanation.
         let filter = RefundFilter(
             scope: selectedScope,
             searchText: searchText,
             retailer: selectedRetailer,
-            startDate: usesExpectedDateRange ? expectedDateStart : nil,
-            endDate: usesExpectedDateRange ? expectedDateEnd : nil,
+            startDate: usesExpectedDateRange
+                ? min(expectedDateStart, expectedDateEnd)
+                : nil,
+            endDate: usesExpectedDateRange
+                ? max(expectedDateStart, expectedDateEnd)
+                : nil,
             dateField: selectedDateField,
             refundMethod: selectedMethod
         )
