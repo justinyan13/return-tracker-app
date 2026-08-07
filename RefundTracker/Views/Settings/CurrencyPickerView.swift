@@ -40,6 +40,18 @@ struct CurrencyPickerView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            currencyList
+                // The selected code can sit far below the preferred ones, so
+                // bring it into view instead of opening at the top of the list.
+                .onAppear {
+                    guard filteredCodes.contains(selection) else { return }
+                    proxy.scrollTo(selection, anchor: .center)
+                }
+        }
+    }
+
+    private var currencyList: some View {
         List(filteredCodes, id: \.self) { code in
             Button {
                 selection = code
@@ -68,6 +80,7 @@ struct CurrencyPickerView: View {
             .accessibilityLabel(
                 "\(currencyName(for: code)), \(code)\(selection == code ? ", selected" : "")"
             )
+            .accessibilityIdentifier("currency.\(code)")
         }
         .scrollContentBackground(.hidden)
         .background(RefundBackdrop())
@@ -87,9 +100,14 @@ struct CurrencyPickerView: View {
     }
 
     private func currencyDetail(for code: String) -> String {
-        let symbol = Locale(identifier: "en_\(code)")
+        // Building the locale from `en_<code>` reads the currency code as a
+        // region, which every currency resolves to the generic "¤" placeholder.
+        // Overriding the currency component resolves the real symbol.
+        var components = Locale.Components(locale: .current)
+        components.currency = Locale.Currency(code)
+        let symbol = Locale(components: components)
             .currencySymbol
-            .flatMap { $0.isEmpty ? nil : $0 } ?? code
+            .flatMap { $0.isEmpty || $0 == "¤" ? nil : $0 } ?? code
         return symbol == code ? code : "\(code) · \(symbol)"
     }
 }

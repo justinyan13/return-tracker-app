@@ -53,6 +53,7 @@ struct SettingsView: View {
                             value: settings.defaultCurrencyCode
                         )
                     }
+                    .accessibilityIdentifier("settings.defaultCurrency")
                 } header: {
                     Text("Set it once")
                 } footer: {
