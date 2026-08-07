@@ -47,6 +47,69 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Refunded"].waitForExistence(timeout: 3))
     }
 
+    /// Selecting a currency used to crash the app: `AppSettings` normalized the
+    /// new value by assigning to the property from inside its own `didSet`,
+    /// which recurses forever under the @Observable macro.
+    func testSelectingADefaultCurrency() {
+        launchApp()
+
+        app.tabBars.buttons["Settings"].tap()
+
+        let currencyRow = app.buttons["settings.defaultCurrency"]
+        XCTAssertTrue(currencyRow.waitForExistence(timeout: 3))
+        currencyRow.tap()
+
+        let euro = app.buttons["currency.EUR"]
+        XCTAssertTrue(euro.waitForExistence(timeout: 3))
+        euro.tap()
+
+        // Still responsive, and the new default reached both the row and the
+        // summary card that reads the same setting.
+        XCTAssertTrue(currencyRow.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            staticText(startingWith: "EUR ·").waitForExistence(timeout: 3),
+            "Settings should show the newly selected currency"
+        )
+    }
+
+    func testChangingTheExpectedRefundWindow() {
+        launchApp()
+
+        app.tabBars.buttons["Settings"].tap()
+
+        let stepper = app.steppers.firstMatch
+        XCTAssertTrue(stepper.waitForExistence(timeout: 3))
+        stepper.buttons["Increment"].tap()
+
+        XCTAssertTrue(
+            staticText(containing: "11 business days")
+                .waitForExistence(timeout: 3)
+        )
+    }
+
+    func testAddingARefundWithAnItemName() {
+        launchApp()
+
+        addRefund(
+            retailer: "Everlane",
+            item: "ReNew Transit Backpack",
+            amount: "95.00"
+        )
+
+        refundRow(named: "Everlane").tap()
+
+        let moreDetails = app.buttons
+            .matching(NSPredicate(format: "label BEGINSWITH 'More details'"))
+            .firstMatch
+        XCTAssertTrue(moreDetails.waitForExistence(timeout: 3))
+        moreDetails.tap()
+
+        XCTAssertTrue(
+            staticText(containing: "ReNew Transit Backpack")
+                .waitForExistence(timeout: 3)
+        )
+    }
+
     func testFilteringOverdueRefunds() {
         launchApp(seedSampleData: true)
 
@@ -81,7 +144,11 @@ final class RefundTrackerUITests: XCTestCase {
         app.launch()
     }
 
-    private func addRefund(retailer: String, amount: String) {
+    private func addRefund(
+        retailer: String,
+        item: String? = nil,
+        amount: String
+    ) {
         let identifiedAddButton = app.buttons["addRefundButton"]
         let addButton = identifiedAddButton.exists
             ? identifiedAddButton
@@ -93,6 +160,13 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertTrue(retailerField.waitForExistence(timeout: 2))
         retailerField.tap()
         retailerField.typeText(retailer)
+
+        let itemField = app.textFields["itemField"]
+        XCTAssertTrue(itemField.waitForExistence(timeout: 2))
+        if let item {
+            itemField.tap()
+            itemField.typeText(item)
+        }
 
         let amountField = app.textFields["amountField"]
         amountField.tap()
@@ -107,6 +181,18 @@ final class RefundTrackerUITests: XCTestCase {
         let doneButton = app.toolbars.buttons["Done"]
         XCTAssertTrue(doneButton.waitForExistence(timeout: 2))
         doneButton.tap()
+    }
+
+    private func staticText(containing text: String) -> XCUIElement {
+        app.staticTexts
+            .matching(NSPredicate(format: "label CONTAINS %@", text))
+            .firstMatch
+    }
+
+    private func staticText(startingWith text: String) -> XCUIElement {
+        app.staticTexts
+            .matching(NSPredicate(format: "label BEGINSWITH %@", text))
+            .firstMatch
     }
 
     private func refundRow(named merchant: String) -> XCUIElement {
