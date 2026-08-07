@@ -28,7 +28,10 @@ struct InsightsView: View {
     }
 
     private var insights: some View {
-        let currencyCode = settings.defaultCurrencyCode
+        let currencyCode = viewModel.displayCurrencyCode(
+            for: refunds,
+            preferred: settings.defaultCurrencyCode
+        )
         let snapshot = viewModel.metrics(
             for: refunds,
             currencyCode: currencyCode
