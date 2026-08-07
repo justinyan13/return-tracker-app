@@ -16,6 +16,7 @@ struct RefundFormView: View {
 
     private enum Field: Hashable {
         case merchant
+        case item
         case amount
     }
 
@@ -29,23 +30,36 @@ struct RefundFormView: View {
             ZStack {
                 RefundBackdrop()
 
-                ScrollView {
-                    VStack(spacing: 22) {
-                        if focusedField == nil {
-                            introduction
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 22) {
+                            if focusedField == nil {
+                                introduction
+                            }
+
+                            refundCard
+
+                            if didAttemptSave && !viewModel.validationMessages.isEmpty {
+                                validationCard
+                            }
+
+                            saveButton
                         }
-
-                        refundCard
-
-                        if didAttemptSave && !viewModel.validationMessages.isEmpty {
-                            validationCard
-                        }
-
-                        saveButton
+                        .padding(.horizontal, 18)
+                        .padding(.top, 18)
+                        .padding(.bottom, 28)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 18)
-                    .padding(.bottom, 28)
+                    // The keyboard and its toolbar cover the lower half of the
+                    // sheet. Without this, a field below the fold stays visible
+                    // but unresponsive, because taps land on the toolbar
+                    // instead. Lifting the focused field to the top keeps the
+                    // remaining fields inside the tappable area.
+                    .onChange(of: focusedField) { _, newValue in
+                        guard let newValue else { return }
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(newValue, anchor: .top)
+                        }
+                    }
                 }
             }
             .navigationTitle(refund == nil ? "Add refund" : "Edit refund")
@@ -113,7 +127,7 @@ struct RefundFormView: View {
                     .textInputAutocapitalization(.words)
                     .submitLabel(.next)
                     .focused($focusedField, equals: .merchant)
-                    .onSubmit { focusedField = .amount }
+                    .onSubmit { focusedField = .item }
                     .padding(.horizontal, 14)
                     .frame(minHeight: 52)
                     .background(
@@ -123,6 +137,24 @@ struct RefundFormView: View {
                     .accessibilityIdentifier("retailerField")
             }
             .id(Field.merchant)
+
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel("Item name", symbol: "bag")
+                TextField("Optional — what you returned", text: $viewModel.itemName)
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.next)
+                    .focused($focusedField, equals: .item)
+                    .onSubmit { focusedField = .amount }
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 52)
+                    .background(
+                        fieldBackground,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+                    .accessibilityIdentifier("itemField")
+                    .accessibilityLabel("Item name, optional")
+            }
+            .id(Field.item)
 
             VStack(alignment: .leading, spacing: 8) {
                 fieldLabel("Refund amount", symbol: "banknote")
@@ -245,6 +277,7 @@ struct RefundFormView: View {
 
     private var hasUnsavedContent: Bool {
         !viewModel.retailerName.isEmpty
+            || !viewModel.itemName.isEmpty
             || !viewModel.amountText.isEmpty
             || refund != nil
     }

@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class RefundFormViewModel {
     var retailerName: String
+    var itemName: String
     var amountText: String
     private(set) var currencyCode: String
     var returnDate: Date
@@ -43,6 +44,9 @@ final class RefundFormViewModel {
                 ]
             ) ?? now
             retailerName = refund.retailerName
+            // `userFacingItemName` hides the placeholder written for records
+            // saved without an item, so it never shows up as literal text.
+            itemName = refund.userFacingItemName ?? ""
             amountText = NSDecimalNumber(decimal: refund.refundAmount).stringValue
             currencyCode = Self.normalizedCurrencyCode(refund.currencyCode)
             returnDate = min(savedTrackedDate, upperBound)
@@ -53,6 +57,7 @@ final class RefundFormViewModel {
             shouldDeriveExpectedDate = false
         } else {
             retailerName = ""
+            itemName = ""
             amountText = ""
             currencyCode = Self.normalizedCurrencyCode(defaultCurrencyCode)
             returnDate = today
@@ -141,9 +146,11 @@ final class RefundFormViewModel {
         refund.refundAmount = amount
         refund.currencyCode = currencyCode
 
-        if refund.itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            refund.itemName = Refund.simplifiedItemPlaceholder
-        }
+        let trimmedItemName = itemName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        refund.itemName = trimmedItemName.isEmpty
+            ? Refund.simplifiedItemPlaceholder
+            : trimmedItemName
 
         if !isEditing {
             refund.returnDate = returnDate
