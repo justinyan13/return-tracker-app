@@ -61,6 +61,7 @@ struct CurrencyPickerView: View {
                     code: code,
                     name: currencyName(for: code),
                     symbol: currencySymbol(for: code),
+                    flag: Self.flag(for: code),
                     isSelected: selection == code
                 )
                 // The stock row fill is opaque and spans the full width, which
@@ -111,26 +112,42 @@ struct CurrencyPickerView: View {
             .currencySymbol
             .flatMap { $0.isEmpty || $0 == "¤" ? nil : $0 } ?? code
     }
+
+    /// An ISO 4217 code is its issuing country's ISO 3166-1 code plus a letter
+    /// naming the unit — USD is US, JPY is JP — so the first two characters
+    /// give the flag. Supranational codes break the pattern: the euro has no
+    /// country, and the X-prefixed units (XAF, XCD, XAU) are shared or are
+    /// metals, so those fall back to the currency symbol.
+    static func flag(for code: String) -> String? {
+        let regionCode = code == "EUR" ? "EU" : String(code.prefix(2))
+        guard regionCode == "EU" || Locale.Region(regionCode).isISORegion else {
+            return nil
+        }
+
+        var scalars = String.UnicodeScalarView()
+        for character in regionCode.unicodeScalars {
+            guard ("A" ... "Z").contains(Character(character)),
+                  let indicator = UnicodeScalar(
+                      0x1F1E6 + character.value - 0x41
+                  ) else {
+                return nil
+            }
+            scalars.append(indicator)
+        }
+        return String(scalars)
+    }
 }
 
 private struct CurrencyRow: View {
     let code: String
     let name: String
     let symbol: String
+    let flag: String?
     let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 13) {
-            Text(symbol)
-                .font(.system(size: 17, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .padding(.horizontal, 4)
-                .frame(width: 42, height: 42)
-                .background(RefundTheme.gradient(for: code))
-                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                .accessibilityHidden(true)
+            mark
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
@@ -138,7 +155,7 @@ private struct CurrencyRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(code)
+                Text(symbol == code ? code : "\(code) · \(symbol)")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
             }
@@ -155,5 +172,30 @@ private struct CurrencyRow: View {
         .padding(.horizontal, 14)
         .frame(minHeight: 58)
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var mark: some View {
+        if let flag {
+            Text(flag)
+                .font(.system(size: 27))
+                .frame(width: 42, height: 42)
+                .background(
+                    RefundTheme.color(for: code).opacity(0.13),
+                    in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                )
+                .accessibilityHidden(true)
+        } else {
+            Text(symbol)
+                .font(.system(size: 17, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .padding(.horizontal, 4)
+                .frame(width: 42, height: 42)
+                .background(RefundTheme.gradient(for: code))
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .accessibilityHidden(true)
+        }
     }
 }

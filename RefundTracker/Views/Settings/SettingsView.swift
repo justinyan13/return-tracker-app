@@ -11,6 +11,14 @@ struct SettingsView: View {
     @State private var pendingConfirmation: SettingsConfirmation?
     @State private var presentedAlert: SettingsAlert?
     @State private var isRequestingNotifications = false
+    @State private var isShowingCurrencyPicker = false
+
+    private var currencyBinding: Binding<String> {
+        Binding(
+            get: { settings.defaultCurrencyCode },
+            set: { settings.defaultCurrencyCode = $0 }
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -18,7 +26,11 @@ struct SettingsView: View {
                 RefundBackdrop()
 
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
+                    // A plain VStack, not lazy: the whole screen is a handful
+                    // of cards, and a lazy container rebuilds rows as the
+                    // selection changes, which is what broke the pushed
+                    // currency picker.
+                    VStack(alignment: .leading, spacing: 18) {
                         SettingsDefaultsHero(
                             currencyCode: settings.defaultCurrencyCode,
                             expectedDays: settings.defaultExpectedRefundBusinessDays
@@ -39,6 +51,13 @@ struct SettingsView: View {
             }
             .navigationTitle("Make it yours")
             .toolbarBackground(.hidden, for: .navigationBar)
+            // Owned by the stack rather than by a row inside the scroll view.
+            // As a `NavigationLink` destination, picking a currency rewrote
+            // the row that owned the link, detaching the screen already on
+            // screen: it stopped dismissing and ignored every later tap.
+            .navigationDestination(isPresented: $isShowingCurrencyPicker) {
+                CurrencyPickerView(selection: currencyBinding)
+            }
             .confirmationDialog(
                 confirmationTitle,
                 isPresented: Binding(
@@ -100,10 +119,8 @@ struct SettingsView: View {
                 range: 1 ... 60
             )
 
-            NavigationLink {
-                CurrencyPickerView(
-                    selection: $settings.defaultCurrencyCode
-                )
+            Button {
+                isShowingCurrencyPicker = true
             } label: {
                 SettingsRow {
                     SettingsRowLabel(

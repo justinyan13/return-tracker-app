@@ -63,12 +63,31 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertTrue(euro.waitForExistence(timeout: 3))
         euro.tap()
 
-        // Still responsive, and the new default reached both the row and the
-        // summary card that reads the same setting.
-        XCTAssertTrue(currencyRow.waitForExistence(timeout: 3))
         XCTAssertTrue(
-            staticText(startingWith: "EUR ·").waitForExistence(timeout: 3),
+            waitForCurrencyPickerToClose(),
+            "Picking a currency should return to Settings"
+        )
+        XCTAssertTrue(
+            heroSummary(for: "EUR").waitForExistence(timeout: 3),
             "Settings should show the newly selected currency"
+        )
+
+        // A second trip through the picker: the row that opens it is rewritten
+        // when the selection changes, which used to leave the pushed screen
+        // detached, ignoring both the dismiss and every later tap.
+        currencyRow.tap()
+
+        let pound = app.buttons["currency.GBP"]
+        XCTAssertTrue(pound.waitForExistence(timeout: 3))
+        pound.tap()
+
+        XCTAssertTrue(
+            waitForCurrencyPickerToClose(),
+            "The picker should still dismiss on a second selection"
+        )
+        XCTAssertTrue(
+            heroSummary(for: "GBP").waitForExistence(timeout: 3),
+            "Settings should show the second selected currency"
         )
     }
 
@@ -181,6 +200,35 @@ final class RefundTrackerUITests: XCTestCase {
         let doneButton = app.toolbars.buttons["Done"]
         XCTAssertTrue(doneButton.waitForExistence(timeout: 2))
         doneButton.tap()
+    }
+
+    /// The Settings summary card, e.g. "EUR · 10 business days". The picker
+    /// lists "EUR · €" for the same code, so match the trailing copy too and
+    /// keep this from passing against a picker that is still on screen.
+    private func heroSummary(for currencyCode: String) -> XCUIElement {
+        app.staticTexts
+            .matching(
+                NSPredicate(
+                    format: "label BEGINSWITH %@ AND label CONTAINS 'business'",
+                    "\(currencyCode) · "
+                )
+            )
+            .firstMatch
+    }
+
+    /// Settings stays in the accessibility tree behind the pushed picker, and
+    /// its rows keep reporting `exists` and even `isHittable`, so neither one
+    /// proves the picker closed. The picker's own rows disappearing does.
+    private func waitForCurrencyPickerToClose(
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        let anyCurrencyRow = app.buttons["currency.USD"]
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if !anyCurrencyRow.exists { return true }
+            _ = anyCurrencyRow.waitForExistence(timeout: 0.2)
+        }
+        return false
     }
 
     private func staticText(containing text: String) -> XCUIElement {
