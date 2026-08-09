@@ -57,36 +57,38 @@ struct CurrencyPickerView: View {
                 selection = code
                 dismiss()
             } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(currencyName(for: code))
-                            .foregroundStyle(.primary)
-                        Text(currencyDetail(for: code))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    if selection == code {
-                        Image(systemName: "checkmark")
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.tint)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .contentShape(Rectangle())
+                CurrencyRow(
+                    code: code,
+                    name: currencyName(for: code),
+                    symbol: currencySymbol(for: code),
+                    isSelected: selection == code
+                )
+                // The stock row fill is opaque and spans the full width, which
+                // hides the backdrop and makes this screen the odd one out.
+                // Carrying the background on the content instead keeps it
+                // inside the row insets, matching the app's card inset.
+                .background(
+                    Color(uiColor: .secondarySystemGroupedBackground)
+                        .opacity(0.82),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
             }
+            .buttonStyle(.plain)
+            .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
             .accessibilityLabel(
                 "\(currencyName(for: code)), \(code)\(selection == code ? ", selected" : "")"
             )
             .accessibilityIdentifier("currency.\(code)")
         }
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(RefundBackdrop())
         .tint(RefundTheme.violet)
-        .navigationTitle("Default Currency")
+        .navigationTitle("Default currency")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .searchable(text: $searchText, prompt: "Currency or code")
         .overlay {
             if filteredCodes.isEmpty {
@@ -99,15 +101,59 @@ struct CurrencyPickerView: View {
         Locale.current.localizedString(forCurrencyCode: code) ?? code
     }
 
-    private func currencyDetail(for code: String) -> String {
+    private func currencySymbol(for code: String) -> String {
         // Building the locale from `en_<code>` reads the currency code as a
         // region, which every currency resolves to the generic "¤" placeholder.
         // Overriding the currency component resolves the real symbol.
         var components = Locale.Components(locale: .current)
         components.currency = Locale.Currency(code)
-        let symbol = Locale(components: components)
+        return Locale(components: components)
             .currencySymbol
             .flatMap { $0.isEmpty || $0 == "¤" ? nil : $0 } ?? code
-        return symbol == code ? code : "\(code) · \(symbol)"
+    }
+}
+
+private struct CurrencyRow: View {
+    let code: String
+    let name: String
+    let symbol: String
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Text(symbol)
+                .font(.system(size: 17, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .padding(.horizontal, 4)
+                .frame(width: 42, height: 42)
+                .background(RefundTheme.gradient(for: code))
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(code)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(RefundTheme.violet)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 58)
+        .contentShape(Rectangle())
     }
 }

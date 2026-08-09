@@ -13,187 +13,28 @@ struct SettingsView: View {
     @State private var isRequestingNotifications = false
 
     var body: some View {
-        @Bindable var settings = settings
-
         NavigationStack {
             ZStack {
                 RefundBackdrop()
 
-                Form {
-                    Section {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 18) {
                         SettingsDefaultsHero(
                             currencyCode: settings.defaultCurrencyCode,
                             expectedDays: settings.defaultExpectedRefundBusinessDays
                         )
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
 
-                Section {
-                    Stepper(
-                        value: $settings.defaultExpectedRefundBusinessDays,
-                        in: 1 ... 60
-                    ) {
-                        LabeledContent(
-                            "Expected refund window",
-                            value: "\(settings.defaultExpectedRefundBusinessDays) business \(settings.defaultExpectedRefundBusinessDays == 1 ? "day" : "days")"
-                        )
+                        defaultsCard
+                        remindersCard
+                        appearanceCard
+                        dataCard
+                        resetCard
+                        aboutCard
                     }
-                    .accessibilityHint(
-                        "Sets the suggested expected date for new refunds"
-                    )
-
-                    NavigationLink {
-                        CurrencyPickerView(
-                            selection: $settings.defaultCurrencyCode
-                        )
-                    } label: {
-                        LabeledContent(
-                            "Default currency",
-                            value: settings.defaultCurrencyCode
-                        )
-                    }
-                    .accessibilityIdentifier("settings.defaultCurrency")
-                } header: {
-                    Text("Set it once")
-                } footer: {
-                    Text(
-                        "New refunds use these defaults automatically. Business days exclude Saturdays and Sundays."
-                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                    .padding(.bottom, 28)
                 }
-
-                Section {
-                    Toggle(
-                        isOn: Binding(
-                            get: { settings.notificationsEnabled },
-                            set: { requestedValue in
-                                changeNotifications(to: requestedValue)
-                            }
-                        )
-                    ) {
-                        HStack {
-                            Text("Refund reminders")
-                            if isRequestingNotifications {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .accessibilityLabel(
-                                        "Requesting notification permission"
-                                    )
-                            }
-                        }
-                    }
-                    .disabled(isRequestingNotifications)
-                    .accessibilityIdentifier("settings.notifications")
-
-                    if settings.notificationsEnabled {
-                        Stepper(
-                            value: $settings.remindBeforeDays,
-                            in: 0 ... 30
-                        ) {
-                            LabeledContent(
-                                "Early reminder",
-                                value: earlyReminderLabel(settings.remindBeforeDays)
-                            )
-                        }
-
-                        Toggle(
-                            "On expected date",
-                            isOn: $settings.remindOnExpectedDate
-                        )
-                        Toggle(
-                            "When overdue",
-                            isOn: $settings.remindWhenOverdue
-                        )
-
-                        if settings.remindWhenOverdue {
-                            Stepper(
-                                value: $settings.overdueFollowUpDays,
-                                in: 1 ... 30
-                            ) {
-                                LabeledContent(
-                                    "Overdue follow-up",
-                                    value: "\(settings.overdueFollowUpDays) \(settings.overdueFollowUpDays == 1 ? "day" : "days") later"
-                                )
-                            }
-                        }
-                    }
-                } header: {
-                    Text("Gentle nudges")
-                } footer: {
-                    Text(
-                        settings.notificationsEnabled
-                            ? "Reminder timing updates automatically when a refund changes."
-                            : "Permission is requested only when you turn reminders on."
-                    )
-                }
-
-                Section("Pick a mood") {
-                    Picker("Theme", selection: $settings.appearance) {
-                        ForEach(AppAppearance.allCases) { appearance in
-                            Text(appearance.displayName)
-                                .tag(appearance)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityLabel("App appearance")
-                }
-
-                Section {
-                    Button {
-                        exportCSV()
-                    } label: {
-                        SettingsActionLabel(
-                            title: "Export refunds as CSV",
-                            detail: refunds.isEmpty
-                                ? "No records to export"
-                                : "\(refunds.count) \(refunds.count == 1 ? "record" : "records")",
-                            systemImage: "square.and.arrow.up"
-                        )
-                    }
-                    .disabled(refunds.isEmpty)
-                    .accessibilityIdentifier("settings.exportCSV")
-
-                    Button {
-                        if refunds.contains(where: \.isSampleData) {
-                            pendingConfirmation = .resetSampleData
-                        } else {
-                            loadSampleData()
-                        }
-                    } label: {
-                        SettingsActionLabel(
-                            title: refunds.contains(where: \.isSampleData)
-                                ? "Reset sample data"
-                                : "Load sample data",
-                            detail: "Five realistic refund scenarios",
-                            systemImage: "sparkles"
-                        )
-                    }
-                    .accessibilityIdentifier("settings.sampleData")
-                } header: {
-                    Text("Your data")
-                } footer: {
-                    Text(
-                        "Sample records are never added automatically. Resetting samples does not affect refunds you created."
-                    )
-                }
-
-                Section {
-                    Button("Restore default settings", role: .destructive) {
-                        pendingConfirmation = .resetSettings
-                    }
-                } footer: {
-                    Text(
-                        "Refund Tracker stores records and attachments locally on this device."
-                    )
-                }
-
-                Section("About") {
-                    LabeledContent("Version", value: appVersion)
-                    LabeledContent("Data storage", value: "On device")
-                }
-                }
-                .scrollContentBackground(.hidden)
-                .listSectionSpacing(18)
                 .tint(RefundTheme.violet)
             }
             .navigationTitle("Make it yours")
@@ -235,6 +76,236 @@ struct SettingsView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private var defaultsCard: some View {
+        @Bindable var settings = settings
+
+        return SettingsCard(
+            title: "Set it once",
+            subtitle: "New refunds start with these.",
+            symbol: "slider.horizontal.3",
+            tint: RefundTheme.violet,
+            footer: "Business days exclude Saturdays and Sundays."
+        ) {
+            SettingsStepperRow(
+                title: "Expected refund window",
+                symbol: "calendar.badge.clock",
+                tint: RefundTheme.blue,
+                valueLabel: "\(settings.defaultExpectedRefundBusinessDays) business \(settings.defaultExpectedRefundBusinessDays == 1 ? "day" : "days")",
+                hint: "Sets the suggested expected date for new refunds",
+                value: $settings.defaultExpectedRefundBusinessDays,
+                range: 1 ... 60
+            )
+
+            NavigationLink {
+                CurrencyPickerView(
+                    selection: $settings.defaultCurrencyCode
+                )
+            } label: {
+                SettingsRow {
+                    SettingsRowLabel(
+                        title: "Default currency",
+                        symbol: "banknote",
+                        tint: RefundTheme.mint,
+                        value: settings.defaultCurrencyCode,
+                        showsChevron: true
+                    )
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("settings.defaultCurrency")
+        }
+    }
+
+    private var remindersCard: some View {
+        @Bindable var settings = settings
+
+        return SettingsCard(
+            title: "Gentle nudges",
+            subtitle: "Reminders while you wait.",
+            symbol: "bell.badge.fill",
+            tint: RefundTheme.blue,
+            footer: settings.notificationsEnabled
+                ? "Reminder timing updates automatically when a refund changes."
+                : "Permission is requested only when you turn reminders on."
+        ) {
+            SettingsToggleRow(
+                title: "Refund reminders",
+                symbol: "bell.fill",
+                tint: RefundTheme.mango,
+                identifier: "settings.notifications",
+                isBusy: isRequestingNotifications,
+                isOn: Binding(
+                    get: { settings.notificationsEnabled },
+                    set: { requestedValue in
+                        changeNotifications(to: requestedValue)
+                    }
+                )
+            )
+            .disabled(isRequestingNotifications)
+
+            if settings.notificationsEnabled {
+                SettingsStepperRow(
+                    title: "Early reminder",
+                    symbol: "clock.arrow.circlepath",
+                    tint: RefundTheme.blue,
+                    valueLabel: earlyReminderLabel(settings.remindBeforeDays),
+                    value: $settings.remindBeforeDays,
+                    range: 0 ... 30
+                )
+
+                SettingsToggleRow(
+                    title: "On expected date",
+                    symbol: "calendar.badge.checkmark",
+                    tint: RefundTheme.mint,
+                    isOn: $settings.remindOnExpectedDate
+                )
+
+                SettingsToggleRow(
+                    title: "When overdue",
+                    symbol: "exclamationmark.circle.fill",
+                    tint: RefundTheme.coral,
+                    isOn: $settings.remindWhenOverdue
+                )
+
+                if settings.remindWhenOverdue {
+                    SettingsStepperRow(
+                        title: "Overdue follow-up",
+                        symbol: "arrow.clockwise",
+                        tint: RefundTheme.coral,
+                        valueLabel: "\(settings.overdueFollowUpDays) \(settings.overdueFollowUpDays == 1 ? "day" : "days") later",
+                        value: $settings.overdueFollowUpDays,
+                        range: 1 ... 30
+                    )
+                }
+            }
+        }
+    }
+
+    private var appearanceCard: some View {
+        @Bindable var settings = settings
+
+        return SettingsCard(
+            title: "Pick a mood",
+            subtitle: "Match iOS, or lock it in.",
+            symbol: "paintpalette.fill",
+            tint: RefundTheme.pink
+        ) {
+            Picker("Theme", selection: $settings.appearance) {
+                ForEach(AppAppearance.allCases) { appearance in
+                    Text(appearance.displayName)
+                        .tag(appearance)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityLabel("App appearance")
+        }
+    }
+
+    private var dataCard: some View {
+        SettingsCard(
+            title: "Your data",
+            subtitle: "Take it with you, or explore with samples.",
+            symbol: "tray.full.fill",
+            tint: RefundTheme.mango,
+            footer: "Sample records are never added automatically. Resetting samples does not affect refunds you created."
+        ) {
+            Button {
+                exportCSV()
+            } label: {
+                SettingsRow {
+                    SettingsRowLabel(
+                        title: "Export refunds as CSV",
+                        symbol: "square.and.arrow.up",
+                        tint: RefundTheme.blue,
+                        detail: refunds.isEmpty
+                            ? "No records to export"
+                            : "\(refunds.count) \(refunds.count == 1 ? "record" : "records")",
+                        showsChevron: !refunds.isEmpty
+                    )
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(refunds.isEmpty)
+            .opacity(refunds.isEmpty ? 0.55 : 1)
+            .accessibilityIdentifier("settings.exportCSV")
+
+            Button {
+                if refunds.contains(where: \.isSampleData) {
+                    pendingConfirmation = .resetSampleData
+                } else {
+                    loadSampleData()
+                }
+            } label: {
+                SettingsRow {
+                    SettingsRowLabel(
+                        title: refunds.contains(where: \.isSampleData)
+                            ? "Reset sample data"
+                            : "Load sample data",
+                        symbol: "sparkles",
+                        tint: RefundTheme.violet,
+                        detail: "Five realistic refund scenarios",
+                        showsChevron: true
+                    )
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("settings.sampleData")
+        }
+    }
+
+    private var resetCard: some View {
+        SettingsCard(
+            title: "Start fresh",
+            subtitle: "Send every preference back to its default.",
+            symbol: "arrow.counterclockwise",
+            tint: RefundTheme.coral
+        ) {
+            Button(role: .destructive) {
+                pendingConfirmation = .resetSettings
+            } label: {
+                SettingsRow {
+                    SettingsRowLabel(
+                        title: "Restore default settings",
+                        symbol: "arrow.counterclockwise",
+                        tint: RefundTheme.coral,
+                        titleColor: RefundTheme.coral
+                    )
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("settings.restoreDefaults")
+        }
+    }
+
+    private var aboutCard: some View {
+        SettingsCard(
+            title: "About",
+            subtitle: "Where things live.",
+            symbol: "info.circle.fill",
+            tint: RefundTheme.violet,
+            footer: "Refund Tracker stores records and attachments locally on this device."
+        ) {
+            SettingsRow {
+                SettingsRowLabel(
+                    title: "Version",
+                    symbol: "app.badge",
+                    tint: RefundTheme.violet,
+                    value: appVersion
+                )
+            }
+
+            SettingsRow {
+                SettingsRowLabel(
+                    title: "Data storage",
+                    symbol: "iphone",
+                    tint: RefundTheme.mint,
+                    value: "On device"
+                )
             }
         }
     }
@@ -398,6 +469,202 @@ struct SettingsView: View {
     }
 }
 
+/// A glass card carrying one group of preferences, so Settings reads with the
+/// same section rhythm as the dashboard, insights, and refund screens.
+private struct SettingsCard<Content: View>: View {
+    let title: String
+    var subtitle: String? = nil
+    let symbol: String
+    var tint: Color = RefundTheme.violet
+    var footer: String? = nil
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            RefundSectionHeading(
+                title: title,
+                subtitle: subtitle,
+                symbol: symbol
+            )
+
+            VStack(spacing: 10) {
+                content
+            }
+
+            if let footer {
+                Text(footer)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .refundGlassCard(tint: tint, padding: 18)
+    }
+}
+
+/// Matches the field treatment used by the refund form, so a control looks the
+/// same whether it is editing a refund or a preference.
+private struct SettingsRow<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .padding(.horizontal, 14)
+            .frame(minHeight: 52)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground).opacity(0.82),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+    }
+}
+
+/// A `Toggle` whose own label carries a trailing `Spacer` leaves no width for
+/// the switch to lay out in, so the switch draws in place but never receives
+/// the tap. Hiding the built-in label and placing the switch beside the label
+/// keeps the control hit-testable.
+private struct SettingsToggleRow: View {
+    let title: String
+    let symbol: String
+    var tint: Color = RefundTheme.violet
+    var identifier: String? = nil
+    var isBusy = false
+    @Binding var isOn: Bool
+
+    var body: some View {
+        SettingsRow {
+            HStack(spacing: 12) {
+                SettingsRowLabel(title: title, symbol: symbol, tint: tint)
+
+                if isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel(
+                            "Requesting notification permission"
+                        )
+                }
+
+                Toggle("", isOn: $isOn)
+                    .labelsHidden()
+                    .accessibilityLabel(title)
+                    .accessibilityIdentifier(identifier ?? "")
+            }
+        }
+    }
+}
+
+/// The stepper control needs about a quarter of the row, which leaves too
+/// little for a title like "Expected refund window" beside it — inline, the
+/// title wrapped to three lines and the value truncated. Giving the title its
+/// own line and pairing the value with the control keeps both readable.
+private struct SettingsStepperRow: View {
+    let title: String
+    let symbol: String
+    var tint: Color = RefundTheme.violet
+    let valueLabel: String
+    var hint: String? = nil
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+
+    var body: some View {
+        SettingsRow {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 30, height: 30)
+                    .background(
+                        tint.opacity(0.13),
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    )
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HStack(spacing: 10) {
+                        Text(valueLabel)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(tint)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+
+                        Spacer(minLength: 8)
+
+                        Stepper(value: $value, in: range) {
+                            EmptyView()
+                        }
+                        .labelsHidden()
+                        .accessibilityLabel(title)
+                        .accessibilityValue(valueLabel)
+                        .accessibilityHint(hint ?? "")
+                    }
+                }
+            }
+            .padding(.vertical, 12)
+        }
+    }
+}
+
+private struct SettingsRowLabel: View {
+    let title: String
+    let symbol: String
+    var tint: Color = RefundTheme.violet
+    var titleColor: Color? = nil
+    var value: String? = nil
+    var detail: String? = nil
+    var showsChevron = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(
+                    tint.opacity(0.13),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(titleColor ?? .primary)
+
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if let value {
+                Text(value)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
 private struct SettingsDefaultsHero: View {
     let currencyCode: String
     let expectedDays: Int
@@ -436,29 +703,6 @@ private struct SettingsDefaultsHero: View {
             Spacer(minLength: 0)
         }
         .refundGlassCard(tint: RefundTheme.violet, padding: 18)
-        .padding(.vertical, 4)
-    }
-}
-
-private struct SettingsActionLabel: View {
-    let title: String
-    let detail: String
-    let systemImage: String
-
-    var body: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .foregroundStyle(.primary)
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        } icon: {
-            Image(systemName: systemImage)
-                .foregroundStyle(.tint)
-                .frame(width: 24)
-        }
     }
 }
 
