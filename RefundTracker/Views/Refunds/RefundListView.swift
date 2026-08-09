@@ -112,58 +112,64 @@ struct RefundListView: View {
                 noResultsState
             } else {
                 List {
-                    Section {
-                        ForEach(results) { refund in
-                            NavigationLink {
-                                RefundDetailView(
-                                    refund: refund,
-                                    deleteRecord: deleteRecord
-                                )
-                                .environment(settings)
-                            } label: {
-                                RefundRowView(refund: refund)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier(
-                                "refundRow_\(refund.id.uuidString)"
-                            )
-                            .swipeActions(
-                                edge: .trailing,
-                                allowsFullSwipe: false
-                            ) {
-                                Button(
-                                    "Delete",
-                                    systemImage: "trash",
-                                    role: .destructive
-                                ) {
-                                    refundPendingDeletion = refund
-                                }
-                            }
-                            .listRowInsets(
-                                EdgeInsets(
-                                    top: 7,
-                                    leading: 16,
-                                    bottom: 7,
-                                    trailing: 16
-                                )
-                            )
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                        }
-                    } header: {
-                        RefundSectionHeading(
-                            title: resultCountText,
-                            subtitle: resultSummary,
-                            symbol: "arrow.uturn.backward.circle.fill"
+                    RefundSectionHeading(
+                        title: resultCountText,
+                        subtitle: resultSummary,
+                        symbol: "arrow.uturn.backward.circle.fill"
+                    )
+                    .listRowInsets(
+                        EdgeInsets(
+                            top: 12,
+                            leading: 20,
+                            bottom: 8,
+                            trailing: 20
                         )
-                        .textCase(nil)
-                        .padding(.horizontal, 2)
-                        .padding(.bottom, 4)
+                    )
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+
+                    ForEach(results) { refund in
+                        NavigationLink {
+                            RefundDetailView(
+                                refund: refund,
+                                deleteRecord: deleteRecord
+                            )
+                            .environment(settings)
+                        } label: {
+                            RefundRowView(refund: refund)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(
+                            "refundRow_\(refund.id.uuidString)"
+                        )
+                        .swipeActions(
+                            edge: .trailing,
+                            allowsFullSwipe: false
+                        ) {
+                            Button(
+                                "Delete",
+                                systemImage: "trash",
+                                role: .destructive
+                            ) {
+                                refundPendingDeletion = refund
+                            }
+                        }
+                        .listRowInsets(
+                            EdgeInsets(
+                                top: 7,
+                                leading: 16,
+                                bottom: 7,
+                                trailing: 16
+                            )
+                        )
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                     }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .background(Color.clear)
+                .contentMargins(.bottom, 18, for: .scrollContent)
                 .accessibilityIdentifier("refundList")
             }
         }
