@@ -72,7 +72,6 @@ private extension UIColor {
 /// intentionally left to the system so iOS can render and adapt Liquid Glass.
 enum RefundChrome {
     static func apply() {
-        UIDatePicker.appearance().backgroundColor = UIColor(RefundTheme.sand)
         UIDatePicker.appearance().tintColor = UIColor(RefundTheme.ink)
     }
 }
