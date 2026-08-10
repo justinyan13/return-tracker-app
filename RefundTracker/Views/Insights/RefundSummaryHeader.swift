@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The combined Refunds screen's headline figure and three at-a-glance counts.
+/// The Outstanding Insights headline and its three at-a-glance counts.
 struct RefundSummaryHeader: View {
     let amount: Decimal
     let currencyCode: String

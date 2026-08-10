@@ -31,12 +31,54 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertFalse(tabBar.buttons["Overview"].exists)
 
         XCTAssertTrue(
+            app.descendants(matching: .any)["refundList"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["refundSummary"].exists
+        )
+    }
+
+    func testInsightsCompletedAndOutstandingModes() {
+        launchApp(seedSampleData: true)
+
+        app.tabBars.buttons["Insights"].tap()
+
+        let completedMode = app.buttons["insights.mode.completed"]
+        let outstandingMode = app.buttons["insights.mode.outstanding"]
+        XCTAssertTrue(completedMode.waitForExistence(timeout: 3))
+        XCTAssertTrue(outstandingMode.exists)
+        XCTAssertTrue(completedMode.isSelected)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["insights.completedContent"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["refundSummary"].exists
+        )
+
+        outstandingMode.tap()
+
+        XCTAssertTrue(outstandingMode.isSelected)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["insights.outstandingContent"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
             app.descendants(matching: .any)["refundSummary"]
                 .waitForExistence(timeout: 3)
         )
         XCTAssertTrue(
-            app.descendants(matching: .any)["refundList"]
-                .waitForExistence(timeout: 3)
+            app.descendants(matching: .any)["insights.completedContent"]
+                .waitForNonExistence(timeout: 2)
+        )
+
+        completedMode.tap()
+
+        XCTAssertTrue(completedMode.isSelected)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["refundSummary"]
+                .waitForNonExistence(timeout: 2)
         )
     }
 

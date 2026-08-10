@@ -17,6 +17,8 @@ struct MonthlyRefundTotal: Identifiable, Equatable {
 struct InsightsMetrics {
     let totalRefundsReceived: Decimal
     let totalRefundsPending: Decimal
+    let completedRefundCount: Int
+    let completedRetailerCount: Int
     let averageRefundDays: Double?
     let retailerPerformance: [RetailerRefundPerformance]
     let overdueRefundCount: Int
@@ -100,6 +102,8 @@ enum InsightsCalculator {
         return InsightsMetrics(
             totalRefundsReceived: completed.reduce(0) { $0 + $1.refundAmount },
             totalRefundsPending: pending.reduce(0) { $0 + $1.refundAmount },
+            completedRefundCount: completed.count,
+            completedRetailerCount: Set(completed.map(\.retailerName)).count,
             averageRefundDays: averageDays,
             retailerPerformance: retailerPerformance,
             overdueRefundCount: overdue.count,

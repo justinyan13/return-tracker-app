@@ -127,13 +127,6 @@ struct RefundListView: View {
 
     private var combinedList: some View {
         List {
-            summaryHeader
-                .listRowInsets(
-                    EdgeInsets(top: 6, leading: 22, bottom: 0, trailing: 22)
-                )
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-
             listToolsHeader
                 .listRowInsets(
                     EdgeInsets(top: 0, leading: 22, bottom: 0, trailing: 22)
@@ -210,26 +203,6 @@ struct RefundListView: View {
         .accessibilityIdentifier("refundList")
     }
 
-    private var summaryHeader: some View {
-        let metrics = dashboardViewModel.metrics(for: refunds)
-        let preferredCurrency = settings.defaultCurrencyCode.uppercased()
-        let primaryCurrency = metrics.awaitingAmountsByCurrency[preferredCurrency] != nil
-            ? preferredCurrency
-            : metrics.awaitingAmountsByCurrency.keys.sorted().first
-                ?? preferredCurrency
-
-        return RefundSummaryHeader(
-            amount: metrics.awaitingAmountsByCurrency[primaryCurrency] ?? 0,
-            currencyCode: primaryCurrency,
-            otherAmounts: metrics.awaitingAmountsByCurrency.filter {
-                $0.key.caseInsensitiveCompare(primaryCurrency) != .orderedSame
-            },
-            openCount: metrics.openReturnCount,
-            overdueCount: metrics.overdueRefundCount,
-            refundedCount: metrics.refundedCount
-        )
-    }
-
     private var listToolsHeader: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .center, spacing: 16) {
@@ -258,7 +231,7 @@ struct RefundListView: View {
 
             Hairline(color: RefundTheme.lineStrong)
         }
-        .padding(.top, 32)
+        .padding(.top, 8)
     }
 
     private var searchField: some View {
