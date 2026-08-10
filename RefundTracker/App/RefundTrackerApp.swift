@@ -10,6 +10,8 @@ struct RefundTrackerApp: App {
     private let isUITesting: Bool
 
     init() {
+        RefundChrome.apply()
+
         let arguments = ProcessInfo.processInfo.arguments
         let isUITesting = arguments.contains("--ui-testing")
         self.isUITesting = isUITesting
@@ -66,6 +68,7 @@ struct RefundTrackerApp: App {
                 startupErrorMessage: startupErrorMessage
             )
             .environment(settings)
+            .tint(RefundTheme.ink)
             .preferredColorScheme(settings.appearance.colorScheme)
         }
         .modelContainer(modelContainer)

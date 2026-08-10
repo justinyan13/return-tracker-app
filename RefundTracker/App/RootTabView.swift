@@ -38,20 +38,20 @@ struct RootTabView: View {
             }
             .id(queryRevision)
             .tabItem {
-                Label("Dashboard", systemImage: "sparkles")
+                Label("Overview", systemImage: "square.stack")
             }
             .tag(Tab.dashboard)
 
             RefundListView()
                 .id(queryRevision)
                 .tabItem {
-                    Label("Refunds", systemImage: "list.bullet.rectangle")
+                    Label("Refunds", systemImage: "list.bullet")
                 }
                 .tag(Tab.refunds)
 
             Color.clear
                 .tabItem {
-                    Label("Add", systemImage: "plus.circle.fill")
+                    Label("Add", systemImage: "plus")
                 }
                 .tag(Tab.add)
                 .accessibilityIdentifier("addRefundButton")
@@ -59,17 +59,18 @@ struct RootTabView: View {
             InsightsView()
                 .id(queryRevision)
                 .tabItem {
-                    Label("Insights", systemImage: "chart.bar.xaxis")
+                    Label("Insights", systemImage: "chart.bar")
                 }
                 .tag(Tab.insights)
 
             SettingsView()
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
+                    Label("Settings", systemImage: "slider.horizontal.3")
                 }
                 .tag(Tab.settings)
         }
-        .tint(RefundTheme.violet)
+        .tint(RefundTheme.ink)
+        .tabBarMinimizeBehavior(.onScrollDown)
         .onChange(of: selectedTab) { oldValue, newValue in
             guard newValue == .add else {
                 previousTab = newValue
@@ -81,7 +82,7 @@ struct RootTabView: View {
         .sheet(isPresented: $isPresentingAddRefund) {
             RefundFormView()
                 .environment(settings)
-                .presentationCornerRadius(32)
+                .presentationCornerRadius(6)
         }
         .fullScreenCover(isPresented: $isPresentingOnboarding) {
             OnboardingView(isPresented: $isPresentingOnboarding) {

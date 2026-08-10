@@ -35,6 +35,36 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Nordstrom Rack"].waitForExistence(timeout: 3))
     }
 
+    func testChoosingAndEditingARefundCoverEmoji() {
+        launchApp()
+        addRefund(
+            retailer: "Baggu",
+            amount: "68.00",
+            coverOptionIndex: 0
+        )
+
+        refundRow(named: "Baggu").tap()
+
+        let detailCover = app.descendants(matching: .any)["refundDetailCoverEmoji"]
+        XCTAssertTrue(detailCover.waitForExistence(timeout: 3))
+        XCTAssertEqual(detailCover.value as? String, "👗")
+
+        app.buttons["editRefundButton"].tap()
+        let pickerButton = app.buttons["coverEmojiPickerButton"]
+        XCTAssertTrue(pickerButton.waitForExistence(timeout: 2))
+        XCTAssertEqual(pickerButton.value as? String, "👗")
+
+        pickerButton.tap()
+        let newCover = app.buttons["coverEmojiOption_12"]
+        XCTAssertTrue(newCover.waitForExistence(timeout: 2))
+        newCover.tap()
+        XCTAssertEqual(pickerButton.value as? String, "👠")
+
+        app.buttons["saveRefundButton"].tap()
+        XCTAssertTrue(detailCover.waitForExistence(timeout: 3))
+        XCTAssertEqual(detailCover.value as? String, "👠")
+    }
+
     func testMarkingARefundAsReceived() {
         launchApp()
         addRefund(retailer: "REI", amount: "179.95")
@@ -68,7 +98,7 @@ final class RefundTrackerUITests: XCTestCase {
             "Picking a currency should return to Settings"
         )
         XCTAssertTrue(
-            heroSummary(for: "EUR").waitForExistence(timeout: 3),
+            defaultCurrencyRow(showing: "EUR").waitForExistence(timeout: 3),
             "Settings should show the newly selected currency"
         )
 
@@ -86,7 +116,7 @@ final class RefundTrackerUITests: XCTestCase {
             "The picker should still dismiss on a second selection"
         )
         XCTAssertTrue(
-            heroSummary(for: "GBP").waitForExistence(timeout: 3),
+            defaultCurrencyRow(showing: "GBP").waitForExistence(timeout: 3),
             "Settings should show the second selected currency"
         )
     }
@@ -166,7 +196,8 @@ final class RefundTrackerUITests: XCTestCase {
     private func addRefund(
         retailer: String,
         item: String? = nil,
-        amount: String
+        amount: String,
+        coverOptionIndex: Int? = nil
     ) {
         let identifiedAddButton = app.buttons["addRefundButton"]
         let addButton = identifiedAddButton.exists
@@ -177,6 +208,17 @@ final class RefundTrackerUITests: XCTestCase {
 
         let retailerField = app.textFields["retailerField"]
         XCTAssertTrue(retailerField.waitForExistence(timeout: 2))
+
+        if let coverOptionIndex {
+            let pickerButton = app.buttons["coverEmojiPickerButton"]
+            XCTAssertTrue(pickerButton.waitForExistence(timeout: 2))
+            pickerButton.tap()
+
+            let option = app.buttons["coverEmojiOption_\(coverOptionIndex)"]
+            XCTAssertTrue(option.waitForExistence(timeout: 2))
+            option.tap()
+        }
+
         retailerField.tap()
         retailerField.typeText(retailer)
 
@@ -202,15 +244,16 @@ final class RefundTrackerUITests: XCTestCase {
         doneButton.tap()
     }
 
-    /// The Settings summary card, e.g. "EUR · 10 business days". The picker
-    /// lists "EUR · €" for the same code, so match the trailing copy too and
-    /// keep this from passing against a picker that is still on screen.
-    private func heroSummary(for currencyCode: String) -> XCUIElement {
-        app.staticTexts
+    /// The Settings row that opens the currency picker, carrying the selected
+    /// code as its value. The picker lists the same codes, so callers confirm
+    /// it has closed before matching on this.
+    private func defaultCurrencyRow(showing currencyCode: String) -> XCUIElement {
+        app.buttons
             .matching(
                 NSPredicate(
-                    format: "label BEGINSWITH %@ AND label CONTAINS 'business'",
-                    "\(currencyCode) · "
+                    format: "identifier == %@ AND label CONTAINS %@",
+                    "settings.defaultCurrency",
+                    currencyCode
                 )
             )
             .firstMatch

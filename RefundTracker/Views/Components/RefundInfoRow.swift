@@ -1,27 +1,28 @@
 import SwiftUI
 
+/// Label left, value right, on one line. The old version leaned on an icon per
+/// row; the eyebrow label carries it now.
 struct RefundInfoRow<Content: View>: View {
     let label: String
-    let symbol: String
     @ViewBuilder let content: Content
 
-    init(
-        _ label: String,
-        symbol: String,
-        @ViewBuilder content: () -> Content
-    ) {
+    init(_ label: String, @ViewBuilder content: () -> Content) {
         self.label = label
-        self.symbol = symbol
         self.content = content()
     }
 
     var body: some View {
-        LabeledContent {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(label)
+                .eyebrow(size: 10)
+
+            Spacer(minLength: 12)
+
             content
+                .font(.system(.subheadline))
+                .foregroundStyle(RefundTheme.ink)
                 .multilineTextAlignment(.trailing)
-        } label: {
-            Label(label, systemImage: symbol)
-                .foregroundStyle(.secondary)
         }
+        .padding(.vertical, 10)
     }
 }

@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// A single rule with dots on it: filled for what has happened, hollow for what
+/// has not. No coloured icon wells.
 struct RefundTimelineView: View {
     let refund: Refund
 
@@ -12,8 +14,17 @@ struct RefundTimelineView: View {
                     id: "shipped",
                     title: "Return shipped",
                     date: shippedDate,
-                    symbolName: "truck.box.fill",
                     state: .completed
+                )
+            )
+        } else if refund.isAwaitingShipment, let shipByDate = refund.shipByDate {
+            let isLate = refund.isShipmentOverdue()
+            result.append(
+                RefundTimelineEvent(
+                    id: "shipBy",
+                    title: isLate ? "Send it — deadline passed" : "Send by",
+                    date: shipByDate,
+                    state: isLate ? .attention : .upcoming
                 )
             )
         } else {
@@ -22,7 +33,6 @@ struct RefundTimelineView: View {
                     id: "started",
                     title: "Return started",
                     date: refund.returnDate,
-                    symbolName: "arrow.uturn.backward.circle.fill",
                     state: .completed
                 )
             )
@@ -33,7 +43,6 @@ struct RefundTimelineView: View {
                 id: "expected",
                 title: "Refund expected",
                 date: refund.expectedRefundDate,
-                symbolName: expectedSymbolName,
                 state: expectedState
             )
         )
@@ -44,7 +53,6 @@ struct RefundTimelineView: View {
                     id: "received",
                     title: "Refund received",
                     date: actualDate,
-                    symbolName: "checkmark.circle.fill",
                     state: .completed
                 )
             )
@@ -74,58 +82,59 @@ struct RefundTimelineView: View {
         }
     }
 
-    private var expectedSymbolName: String {
-        switch expectedState {
-        case .completed:
-            "calendar.badge.checkmark"
-        case .upcoming:
-            "calendar.badge.clock"
-        case .attention:
-            "exclamationmark.calendar.fill"
-        case .inactive:
-            "calendar"
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: 16) {
                     VStack(spacing: 0) {
-                        Image(systemName: event.symbolName)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(event.tint)
-                            .frame(width: 30, height: 30)
-                            .background(event.tint.opacity(0.12), in: Circle())
+                        marker(for: event)
+                            .frame(width: 9, height: 9)
+                            .padding(.top, 5)
 
                         if index < events.count - 1 {
                             Rectangle()
-                                .fill(.tertiary)
-                                .frame(width: 2, height: 22)
+                                .fill(RefundTheme.line)
+                                .frame(width: RefundTheme.hairline)
+                                .frame(maxHeight: .infinity)
+                                .padding(.vertical, 4)
                         }
                     }
+                    .frame(width: 9)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(event.title)
-                            .font(.subheadline.weight(.semibold))
-
-                        Text(event.date.formatted(date: .abbreviated, time: .omitted))
-                            .font(.caption)
+                            .font(.system(.footnote).weight(.medium))
                             .foregroundStyle(
                                 event.state == .attention
-                                    ? RefundTheme.coral
-                                    : .secondary
+                                    ? RefundTheme.alert
+                                    : RefundTheme.ink
                             )
-                    }
-                    .padding(.top, 2)
 
-                    Spacer()
+                        Text(event.date, format: .dateTime.day().month(.wide).year())
+                            .serif(14, relativeTo: .subheadline)
+                            .foregroundStyle(RefundTheme.inkSoft)
+                    }
+                    .padding(.bottom, index < events.count - 1 ? 20 : 0)
+
+                    Spacer(minLength: 0)
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(
                     "\(event.title), \(event.date.formatted(date: .long, time: .omitted))"
                 )
             }
+        }
+    }
+
+    @ViewBuilder
+    private func marker(for event: RefundTimelineEvent) -> some View {
+        switch event.state {
+        case .completed, .attention:
+            Circle().fill(event.tint)
+        case .upcoming, .inactive:
+            Circle()
+                .strokeBorder(event.tint, lineWidth: 1)
         }
     }
 }
@@ -141,19 +150,18 @@ private struct RefundTimelineEvent: Identifiable {
     let id: String
     let title: String
     let date: Date
-    let symbolName: String
     let state: State
 
     var tint: Color {
         switch state {
         case .completed:
-            RefundTheme.mint
+            RefundTheme.ink
         case .upcoming:
-            RefundTheme.blue
+            RefundTheme.lineStrong
         case .attention:
-            RefundTheme.coral
+            RefundTheme.alert
         case .inactive:
-            .secondary
+            RefundTheme.inkFaint
         }
     }
 }

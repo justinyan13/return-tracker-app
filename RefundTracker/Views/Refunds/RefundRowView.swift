@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// One line in a list: cover, merchant, what happens next, and the figure.
+/// Rows are separated by a rule rather than floated as cards.
 struct RefundRowView: View {
     let refund: Refund
     var referenceDate: Date
@@ -14,51 +16,66 @@ struct RefundRowView: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 13) {
-            MerchantMark(name: refund.retailerName, size: 50)
+        HStack(alignment: .top, spacing: 14) {
+            RefundCoverMark(emoji: refund.displayCoverEmoji, size: 42)
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(refund.retailerName)
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(refund.retailerName)
+                    .font(.system(.callout).weight(.medium))
+                    .foregroundStyle(RefundTheme.ink)
+                    .lineLimit(1)
+
+                if let itemName = refund.userFacingItemName {
+                    Text(itemName)
+                        .font(.system(.footnote))
+                        .foregroundStyle(RefundTheme.inkSoft)
                         .lineLimit(1)
-
-                    Spacer(minLength: 4)
-
-                    RefundAmountLabel(
-                        amount: refund.refundAmount,
-                        currencyCode: refund.currencyCode,
-                        style: .headline.weight(.heavy)
-                    )
                 }
 
-                HStack(spacing: 8) {
-                    Label(dateText, systemImage: dateSymbol)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(dateColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+                Text(dateText)
+                    .font(.system(.caption))
+                    .foregroundStyle(dateColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.top, 1)
+            }
 
-                    Spacer(minLength: 2)
+            Spacer(minLength: 8)
 
-                    RefundStatusBadge(status: status)
-                        .layoutPriority(1)
-                }
+            VStack(alignment: .trailing, spacing: 7) {
+                RefundAmountLabel(
+                    amount: refund.refundAmount,
+                    currencyCode: refund.currencyCode,
+                    size: 19,
+                    relativeTo: .title3
+                )
+
+                RefundStatusBadge(status: status)
             }
         }
+        .padding(.vertical, 15)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .refundGlassCard(
-            tint: RefundTheme.color(for: refund.retailerName),
-            padding: 14
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint("Opens refund details")
     }
 
+    private var isAwaitingShipment: Bool {
+        refund.isAwaitingShipment
+    }
+
+    private var isShipmentOverdue: Bool {
+        refund.isShipmentOverdue(on: referenceDate, calendar: .current)
+    }
+
     private var dateText: String {
+        if isAwaitingShipment, let shipByDate = refund.shipByDate {
+            return isShipmentOverdue
+                ? "Send it — was due \(shortDate(shipByDate))"
+                : "Send by \(shortDate(shipByDate))"
+        }
+
         switch status {
         case .shipped:
             if let shippedDate = refund.shippedDate {
@@ -82,43 +99,28 @@ struct RefundRowView: View {
         }
     }
 
-    private var dateSymbol: String {
-        switch status {
-        case .shipped:
-            "shippingbox.fill"
-        case .deliveredToRetailer:
-            "checkmark.circle.fill"
-        case .refunded:
-            "arrow.down.circle.fill"
-        case .overdue:
-            "exclamationmark.circle.fill"
-        case .preparingReturn, .refundPending, .disputed, .cancelled:
-            "calendar"
-        }
-    }
-
     private var dateColor: Color {
+        if isAwaitingShipment {
+            return isShipmentOverdue ? RefundTheme.alert : RefundTheme.inkSoft
+        }
+
         switch status {
-        case .overdue:
-            .red
-        case .refunded:
-            .green
-        case .disputed:
-            .orange
+        case .overdue, .disputed:
+            return RefundTheme.alert
         case .preparingReturn, .shipped, .deliveredToRetailer,
-             .refundPending, .cancelled:
-            .secondary
+             .refundPending, .refunded, .cancelled:
+            return RefundTheme.inkSoft
         }
     }
 
     private func shortDate(_ date: Date) -> String {
-        date.formatted(.dateTime.month(.abbreviated).day())
+        date.formatted(.dateTime.day().month(.abbreviated))
     }
 
     private var accessibilitySummary: String {
         let amount = refund.refundAmount.formatted(
             .currency(code: refund.currencyCode)
         )
-        return "\(refund.retailerName), \(amount), \(status.title), \(dateText)"
+        return "\(refund.retailerName), \(refund.displayCoverEmoji) cover, \(amount), \(status.title), \(dateText)"
     }
 }

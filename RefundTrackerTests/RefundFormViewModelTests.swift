@@ -226,7 +226,7 @@ final class RefundFormViewModelTests: XCTestCase {
             now: DomainTestSupport.date(2026, 8, 6)
         )
 
-        XCTAssertFalse(viewModel.tracksShipmentDate)
+        XCTAssertEqual(viewModel.trackedDateKind, .returnStarted)
         XCTAssertEqual(viewModel.trackedDateTitle, "Return date")
 
         viewModel.setTrackedDate(updatedReturnDate)

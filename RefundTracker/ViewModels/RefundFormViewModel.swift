@@ -7,18 +7,59 @@ final class RefundFormViewModel {
     var retailerName: String
     var itemName: String
     var amountText: String
+    var coverEmoji: String
     private(set) var currencyCode: String
     var returnDate: Date
     private(set) var expectedRefundDate: Date
 
+    /// What the single date field on the form actually means.
+    enum TrackedDateKind {
+        /// The day the return went in the post.
+        case shipped
+        /// The deadline for a return that still needs sending.
+        case shipBy
+        /// The day the return was started, for records saved before ship-by
+        /// deadlines existed. Reinterpreting those as deadlines would rewrite
+        /// what the user originally entered, so they keep their old meaning.
+        case returnStarted
+    }
+
+    /// Whether the return is already in the post. When false the tracked date
+    /// stops being a record of what happened and becomes a deadline.
+    var hasShipped: Bool {
+        didSet {
+            guard hasShipped != oldValue else { return }
+            // The two modes point in opposite directions in time, so a date
+            // valid for one is usually invalid for the other.
+            returnDate = hasShipped
+                ? min(returnDate, shippedDateUpperBound)
+                : max(returnDate, today)
+            shouldDeriveExpectedDate = true
+            deriveExpectedDate()
+        }
+    }
+
     let isEditing: Bool
     let shippedDateUpperBound: Date
-    let tracksShipmentDate: Bool
+    /// Whether this return can still be switched between shipped and pending.
+    /// Only new ones can: an existing return moves to shipped through the
+    /// detail screen's "Mark shipped" action, which stamps the real date.
+    let canChooseShipmentState: Bool
 
     private let calendar: Calendar
+    private let today: Date
     private let originalTrackedDate: Date?
+    private let savedTrackedDateKind: TrackedDateKind
     private var defaultExpectedBusinessDays: Int
     private var shouldDeriveExpectedDate: Bool
+
+    /// For a new return the toggle decides; an existing one keeps whatever it
+    /// was saved as.
+    var trackedDateKind: TrackedDateKind {
+        canChooseShipmentState
+            ? (hasShipped ? .shipped : .shipBy)
+            : savedTrackedDateKind
+    }
 
     init(
         refund: Refund? = nil,
@@ -31,11 +72,25 @@ final class RefundFormViewModel {
         let today = calendar.startOfDay(for: now)
 
         self.calendar = calendar
+        self.today = today
         self.defaultExpectedBusinessDays = businessDays
         isEditing = refund != nil
+        canChooseShipmentState = refund == nil
 
         if let refund {
-            let savedTrackedDate = refund.shippedDate ?? refund.returnDate
+            let kind: TrackedDateKind
+            if refund.shippedDate != nil {
+                kind = .shipped
+            } else if refund.shipByDate != nil {
+                kind = .shipBy
+            } else {
+                kind = .returnStarted
+            }
+            savedTrackedDateKind = kind
+
+            let savedTrackedDate = refund.shipByDate
+                ?? refund.shippedDate
+                ?? refund.returnDate
             let upperBound = Self.earliestDate(
                 among: [
                     now,
@@ -48,17 +103,23 @@ final class RefundFormViewModel {
             // saved without an item, so it never shows up as literal text.
             itemName = refund.userFacingItemName ?? ""
             amountText = NSDecimalNumber(decimal: refund.refundAmount).stringValue
+            coverEmoji = refund.displayCoverEmoji
             currencyCode = Self.normalizedCurrencyCode(refund.currencyCode)
-            returnDate = min(savedTrackedDate, upperBound)
+            // A ship-by deadline is allowed to sit in the future; the other
+            // two kinds record something that already happened.
+            returnDate = kind == .shipBy
+                ? savedTrackedDate
+                : min(savedTrackedDate, upperBound)
             expectedRefundDate = refund.expectedRefundDate
             originalTrackedDate = savedTrackedDate
             shippedDateUpperBound = upperBound
-            tracksShipmentDate = refund.shippedDate != nil
+            hasShipped = kind == .shipped
             shouldDeriveExpectedDate = false
         } else {
             retailerName = ""
             itemName = ""
             amountText = ""
+            coverEmoji = RefundCoverEmoji.random()
             currencyCode = Self.normalizedCurrencyCode(defaultCurrencyCode)
             returnDate = today
             expectedRefundDate = BusinessDayCalculator.addingBusinessDays(
@@ -66,19 +127,36 @@ final class RefundFormViewModel {
                 to: today,
                 calendar: calendar
             )
+            savedTrackedDateKind = .shipped
             originalTrackedDate = nil
             shippedDateUpperBound = now
-            tracksShipmentDate = true
+            hasShipped = true
             shouldDeriveExpectedDate = true
         }
     }
 
     var trackedDateTitle: String {
-        tracksShipmentDate ? "Shipped date" : "Return date"
+        switch trackedDateKind {
+        case .shipped: "Shipped date"
+        case .shipBy: "Send by"
+        case .returnStarted: "Return date"
+        }
     }
 
     var trackedDateSymbol: String {
-        tracksShipmentDate ? "shippingbox.fill" : "arrow.uturn.backward.circle.fill"
+        switch trackedDateKind {
+        case .shipped: "shippingbox.fill"
+        case .shipBy: "calendar.badge.exclamationmark"
+        case .returnStarted: "arrow.uturn.backward.circle.fill"
+        }
+    }
+
+    /// A deadline can only be today or later; the other two kinds record
+    /// something that already happened, so they cap at the present.
+    var trackedDateRange: ClosedRange<Date> {
+        trackedDateKind == .shipBy
+            ? today...Date.distantFuture
+            : Date.distantPast...shippedDateUpperBound
     }
 
     var amount: Decimal? {
@@ -130,10 +208,10 @@ final class RefundFormViewModel {
     }
 
     func setTrackedDate(_ date: Date) {
-        returnDate = min(
-            calendar.startOfDay(for: date),
-            calendar.startOfDay(for: shippedDateUpperBound)
-        )
+        let day = calendar.startOfDay(for: date)
+        returnDate = trackedDateKind == .shipBy
+            ? max(day, today)
+            : min(day, calendar.startOfDay(for: shippedDateUpperBound))
         shouldDeriveExpectedDate = true
         deriveExpectedDate()
     }
@@ -145,6 +223,9 @@ final class RefundFormViewModel {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         refund.refundAmount = amount
         refund.currencyCode = currencyCode
+        refund.coverEmoji = coverEmoji.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
 
         let trimmedItemName = itemName
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -153,22 +234,38 @@ final class RefundFormViewModel {
             : trimmedItemName
 
         if !isEditing {
-            refund.returnDate = returnDate
-            refund.shippedDate = returnDate
-            deriveExpectedDate()
-            refund.expectedRefundDate = expectedRefundDate
-            refund.status = .shipped
-        } else if trackedDateChanged {
-            refund.returnDate = returnDate
             deriveExpectedDate()
             refund.expectedRefundDate = expectedRefundDate
 
-            if tracksShipmentDate {
+            switch trackedDateKind {
+            case .shipped, .returnStarted:
+                refund.returnDate = returnDate
                 refund.shippedDate = returnDate
+                refund.shipByDate = nil
+                refund.status = .shipped
+            case .shipBy:
+                // Nothing has been posted yet, so the return started today and
+                // the picked date is the deadline to get it sent.
+                refund.returnDate = today
+                refund.shippedDate = nil
+                refund.shipByDate = returnDate
+                refund.status = .preparingReturn
+            }
+        } else if trackedDateChanged {
+            deriveExpectedDate()
+            refund.expectedRefundDate = expectedRefundDate
 
-                if refund.status == .preparingReturn {
-                    refund.status = .shipped
-                }
+            switch trackedDateKind {
+            case .shipped:
+                refund.returnDate = returnDate
+                refund.shippedDate = returnDate
+                refund.shipByDate = nil
+            case .shipBy:
+                refund.shipByDate = returnDate
+            case .returnStarted:
+                // Pre-deadline record: the date still means when the return
+                // was started, and editing it must not invent a shipment.
+                refund.returnDate = returnDate
             }
         }
 

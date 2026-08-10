@@ -8,18 +8,18 @@ struct RefundAttachmentRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbolName)
-                .font(.title3)
-                .foregroundStyle(.tint)
+                .font(.system(.footnote))
+                .foregroundStyle(RefundTheme.ink)
                 .frame(width: 34, height: 34)
-                .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                .background(RefundTheme.sand)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(attachment.originalFilename)
-                    .font(.subheadline.weight(.medium))
+                    .font(.system(.footnote))
+                    .foregroundStyle(RefundTheme.ink)
                     .lineLimit(1)
                 Text(metadata)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .eyebrow(size: 9)
             }
 
             Spacer()
@@ -27,12 +27,15 @@ struct RefundAttachmentRow: View {
             if let fileURL {
                 ShareLink(item: fileURL) {
                     Image(systemName: "square.and.arrow.up")
+                        .font(.system(.footnote))
+                        .foregroundStyle(RefundTheme.inkSoft)
                         .frame(width: 32, height: 32)
                 }
                 .accessibilityLabel("Share \(attachment.originalFilename)")
             } else {
                 Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .font(.system(.footnote))
+                    .foregroundStyle(RefundTheme.alert)
                     .accessibilityLabel("File unavailable")
             }
         }

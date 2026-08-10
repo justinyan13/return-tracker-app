@@ -41,7 +41,6 @@ struct RefundListView: View {
                 }
             }
             .navigationTitle("Refunds")
-            .toolbarBackground(.hidden, for: .navigationBar)
             .searchable(
                 text: $viewModel.searchText,
                 placement: .navigationBarDrawer(displayMode: .always),
@@ -63,7 +62,7 @@ struct RefundListView: View {
             .sheet(isPresented: $isPresentingAddRefund) {
                 RefundFormView()
                     .environment(settings)
-                    .presentationCornerRadius(32)
+                    .presentationCornerRadius(6)
             }
             .sheet(isPresented: $isPresentingFilters) {
                 RefundFilterSheet(viewModel: viewModel, retailers: retailers)
@@ -100,7 +99,6 @@ struct RefundListView: View {
             RefundWorkflowEmptyState(kind: .firstRefund) {
                 isPresentingAddRefund = true
             }
-            .padding(.top, 14)
         }
     }
 
@@ -109,24 +107,25 @@ struct RefundListView: View {
             filterBar
 
             if results.isEmpty {
-                noResultsState
+                ScrollView {
+                    RefundWorkflowEmptyState(kind: .noResults)
+                }
             } else {
                 List {
-                    RefundSectionHeading(
-                        title: resultCountText,
-                        subtitle: resultSummary,
-                        symbol: "arrow.uturn.backward.circle.fill"
-                    )
-                    .listRowInsets(
-                        EdgeInsets(
-                            top: 12,
-                            leading: 20,
-                            bottom: 8,
-                            trailing: 20
+                    Text(resultSummary)
+                        .eyebrow(size: 10)
+                        .padding(.top, 16)
+                        .padding(.bottom, 4)
+                        .listRowInsets(
+                            EdgeInsets(
+                                top: 0,
+                                leading: 22,
+                                bottom: 0,
+                                trailing: 22
+                            )
                         )
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
 
                     ForEach(results) { refund in
                         NavigationLink {
@@ -156,74 +155,66 @@ struct RefundListView: View {
                         }
                         .listRowInsets(
                             EdgeInsets(
-                                top: 7,
-                                leading: 16,
-                                bottom: 7,
-                                trailing: 16
+                                top: 0,
+                                leading: 22,
+                                bottom: 0,
+                                trailing: 22
                             )
                         )
-                        .listRowSeparator(.hidden)
+                        .listRowSeparatorTint(RefundTheme.line)
+                        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                         .listRowBackground(Color.clear)
                     }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .background(Color.clear)
-                .contentMargins(.bottom, 18, for: .scrollContent)
+                .contentMargins(.bottom, 24, for: .scrollContent)
                 .accessibilityIdentifier("refundList")
             }
         }
     }
 
-    private var noResultsState: some View {
-        ScrollView {
-            RefundWorkflowEmptyState(kind: .noResults)
-                .padding(.top, 10)
-        }
-    }
-
     private var filterBar: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 9) {
-                ForEach(RefundFilterScope.allCases) { filter in
-                    RefundScopePill(
-                        title: filter.displayName,
-                        symbolName: filter.symbolName,
-                        isSelected: viewModel.selectedScope == filter
-                    ) {
-                        withAnimation(.snappy) {
-                            viewModel.selectedScope = filter
+        VStack(spacing: 0) {
+            ScrollView(.horizontal) {
+                HStack(spacing: 22) {
+                    ForEach(RefundFilterScope.allCases) { filter in
+                        RefundScopeTab(
+                            title: filter.displayName,
+                            isSelected: viewModel.selectedScope == filter
+                        ) {
+                            withAnimation(.snappy(duration: 0.2)) {
+                                viewModel.selectedScope = filter
+                            }
                         }
+                        .accessibilityIdentifier(
+                            filter == .overdue
+                                ? "filterOverdueButton"
+                                : "\(filter.rawValue)RefundFilterButton"
+                        )
                     }
-                    .accessibilityIdentifier(
-                        filter == .overdue
-                            ? "filterOverdueButton"
-                            : "\(filter.rawValue)RefundFilterButton"
-                    )
-                }
 
-                RefundScopePill(
-                    title: "More",
-                    symbolName: "line.3.horizontal.decrease",
-                    count: viewModel.hasAdvancedFilters
-                        ? viewModel.appliedFilterCount
-                            - (viewModel.selectedScope == .all ? 0 : 1)
-                        : 0,
-                    isSelected: viewModel.hasAdvancedFilters
-                ) {
-                    isPresentingFilters = true
+                    VerticalHairline(height: 14)
+
+                    RefundScopeTab(
+                        title: "Filters",
+                        count: viewModel.hasAdvancedFilters
+                            ? viewModel.appliedFilterCount
+                                - (viewModel.selectedScope == .all ? 0 : 1)
+                            : 0,
+                        isSelected: viewModel.hasAdvancedFilters
+                    ) {
+                        isPresentingFilters = true
+                    }
+                    .accessibilityIdentifier("refundFilterButton")
                 }
-                .accessibilityIdentifier("refundFilterButton")
+                .padding(.horizontal, 22)
+                .padding(.vertical, 13)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
-        .scrollIndicators(.hidden)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(RefundTheme.violet.opacity(0.09))
-                .frame(height: 1)
+            .scrollIndicators(.hidden)
+
+            Hairline()
         }
     }
 
@@ -249,15 +240,12 @@ struct RefundListView: View {
         .accessibilityIdentifier("refundSortButton")
     }
 
-    private var resultCountText: String {
-        "\(results.count) \(results.count == 1 ? "return" : "returns")"
-    }
-
     private var resultSummary: String {
+        let count = "\(results.count) \(results.count == 1 ? "return" : "returns")"
         let scope = viewModel.selectedScope == .all
             ? "All statuses"
             : viewModel.selectedScope.displayName
-        return "\(scope) · \(viewModel.sortOption.displayName)"
+        return "\(count) · \(scope) · \(viewModel.sortOption.displayName)"
     }
 
     private var errorAlertBinding: Binding<Bool> {
@@ -297,79 +285,45 @@ struct RefundListView: View {
     }
 }
 
-private struct RefundScopePill: View {
+/// A word with a rule under it when chosen. Replaces the filled gradient pills.
+private struct RefundScopeTab: View {
     let title: String
-    let symbolName: String
     var count = 0
     var isSelected = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: symbolName)
-                    .font(.caption.weight(.bold))
-
-                Text(title)
-                    .lineLimit(1)
-
-                if count > 0 {
-                    Text(count.formatted())
-                        .font(.caption2.weight(.heavy))
-                        .foregroundStyle(
-                            isSelected ? RefundTheme.violet : .secondary
+            VStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    Text(title)
+                        .eyebrow(
+                            size: 11,
+                            color: isSelected
+                                ? RefundTheme.ink
+                                : RefundTheme.inkFaint
                         )
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            isSelected
-                                ? Color.white.opacity(0.88)
-                                : RefundTheme.violet.opacity(0.11),
-                            in: Capsule()
-                        )
+                        .lineLimit(1)
+
+                    if count > 0 {
+                        Text(count.formatted())
+                            .serif(11, relativeTo: .footnote)
+                            .foregroundStyle(RefundTheme.ink)
+                            .baselineOffset(5)
+                    }
                 }
+
+                Rectangle()
+                    .fill(isSelected ? RefundTheme.ink : .clear)
+                    .frame(height: 1.5)
             }
-            .font(.subheadline.weight(.bold))
-            .foregroundStyle(isSelected ? .white : .primary)
-            .padding(.horizontal, 13)
-            .padding(.vertical, 9)
-            .background {
-                if isSelected {
-                    RefundTheme.gradient(for: title)
-                        .clipShape(Capsule())
-                } else {
-                    Capsule()
-                        .fill(.thinMaterial)
-                        .overlay {
-                            Capsule()
-                                .stroke(.white.opacity(0.52), lineWidth: 1)
-                        }
-                }
-            }
-            .shadow(
-                color: isSelected
-                    ? RefundTheme.color(for: title).opacity(0.22)
-                    : .clear,
-                radius: 8,
-                y: 4
-            )
+            .fixedSize()
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
             "\(title) filter\(count > 0 ? ", \(count) options" : "")"
         )
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
-    }
-}
-
-private extension RefundFilterScope {
-    var symbolName: String {
-        switch self {
-        case .all: "tray.full"
-        case .active: "clock"
-        case .overdue: "exclamationmark.triangle"
-        case .refunded: "checkmark.circle"
-        case .disputed: "exclamationmark.bubble"
-        }
     }
 }
