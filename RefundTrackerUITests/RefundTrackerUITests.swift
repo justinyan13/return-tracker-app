@@ -19,6 +19,70 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Everlane"].waitForExistence(timeout: 3))
     }
 
+    func testCombinedRefundsScreenAndThreeIconTabs() {
+        launchApp(seedSampleData: true)
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 3))
+
+        let tabs = tabBar.buttons.allElementsBoundByIndex
+        XCTAssertEqual(tabs.map(\.label), ["Refunds", "Insights", "Settings"])
+        XCTAssertTrue(tabBar.buttons["Refunds"].isSelected)
+        XCTAssertFalse(tabBar.buttons["Overview"].exists)
+        XCTAssertFalse(tabBar.buttons["Add"].exists)
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["refundList"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["refundSummary"].exists
+        )
+    }
+
+    func testInsightsCompletedAndOutstandingModes() {
+        launchApp(seedSampleData: true)
+
+        app.tabBars.buttons["Insights"].tap()
+
+        let completedMode = app.buttons["insights.mode.completed"]
+        let outstandingMode = app.buttons["insights.mode.outstanding"]
+        XCTAssertTrue(completedMode.waitForExistence(timeout: 3))
+        XCTAssertTrue(outstandingMode.exists)
+        XCTAssertTrue(completedMode.isSelected)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["insights.completedContent"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["refundSummary"].exists
+        )
+
+        outstandingMode.tap()
+
+        XCTAssertTrue(outstandingMode.isSelected)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["insights.outstandingContent"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["refundSummary"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["insights.completedContent"]
+                .waitForNonExistence(timeout: 2)
+        )
+
+        completedMode.tap()
+
+        XCTAssertTrue(completedMode.isSelected)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["refundSummary"]
+                .waitForNonExistence(timeout: 2)
+        )
+    }
+
     func testEditingARefund() {
         launchApp()
         addRefund(retailer: "Nordstrom", amount: "129.00")
@@ -33,6 +97,36 @@ final class RefundTrackerUITests: XCTestCase {
         app.buttons["saveRefundButton"].tap()
 
         XCTAssertTrue(app.staticTexts["Nordstrom Rack"].waitForExistence(timeout: 3))
+    }
+
+    func testChoosingAndEditingARefundCoverEmoji() {
+        launchApp()
+        addRefund(
+            retailer: "Baggu",
+            amount: "68.00",
+            coverOptionIndex: 0
+        )
+
+        refundRow(named: "Baggu").tap()
+
+        let detailCover = app.descendants(matching: .any)["refundDetailCoverEmoji"]
+        XCTAssertTrue(detailCover.waitForExistence(timeout: 3))
+        XCTAssertEqual(detailCover.value as? String, "👗")
+
+        app.buttons["editRefundButton"].tap()
+        let pickerButton = app.buttons["coverEmojiPickerButton"]
+        XCTAssertTrue(pickerButton.waitForExistence(timeout: 2))
+        XCTAssertEqual(pickerButton.value as? String, "👗")
+
+        pickerButton.tap()
+        let newCover = app.buttons["coverEmojiOption_12"]
+        XCTAssertTrue(newCover.waitForExistence(timeout: 2))
+        newCover.tap()
+        XCTAssertEqual(pickerButton.value as? String, "👠")
+
+        app.buttons["saveRefundButton"].tap()
+        XCTAssertTrue(detailCover.waitForExistence(timeout: 3))
+        XCTAssertEqual(detailCover.value as? String, "👠")
     }
 
     func testMarkingARefundAsReceived() {
@@ -68,7 +162,7 @@ final class RefundTrackerUITests: XCTestCase {
             "Picking a currency should return to Settings"
         )
         XCTAssertTrue(
-            heroSummary(for: "EUR").waitForExistence(timeout: 3),
+            defaultCurrencyRow(showing: "EUR").waitForExistence(timeout: 3),
             "Settings should show the newly selected currency"
         )
 
@@ -86,7 +180,7 @@ final class RefundTrackerUITests: XCTestCase {
             "The picker should still dismiss on a second selection"
         )
         XCTAssertTrue(
-            heroSummary(for: "GBP").waitForExistence(timeout: 3),
+            defaultCurrencyRow(showing: "GBP").waitForExistence(timeout: 3),
             "Settings should show the second selected currency"
         )
     }
@@ -132,13 +226,19 @@ final class RefundTrackerUITests: XCTestCase {
     func testFilteringOverdueRefunds() {
         launchApp(seedSampleData: true)
 
-        app.tabBars.buttons["Refunds"].tap()
-        let overdueFilter = app.buttons["filterOverdueButton"]
+        let openFilter = app.buttons["refundScope.open"]
+        XCTAssertTrue(openFilter.waitForExistence(timeout: 2))
+        XCTAssertTrue(openFilter.isSelected)
+
+        XCTAssertTrue(refundRow(named: "Wayfair").waitForExistence(timeout: 2))
+        XCTAssertTrue(refundRow(named: "Allbirds").waitForExistence(timeout: 2))
+
+        let overdueFilter = app.buttons["refundScope.overdue"]
         XCTAssertTrue(overdueFilter.waitForExistence(timeout: 2))
         overdueFilter.tap()
 
         XCTAssertTrue(refundRow(named: "Wayfair").waitForExistence(timeout: 2))
-        XCTAssertFalse(refundRow(named: "Allbirds").exists)
+        XCTAssertTrue(refundRow(named: "Allbirds").waitForNonExistence(timeout: 2))
     }
 
     func testDeletingARefund() {
@@ -154,6 +254,61 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertTrue(refundRow(named: "Patagonia").waitForNonExistence(timeout: 2))
     }
 
+    func testSwipeDeleteFromRefundList() {
+        launchApp(seedSampleData: true)
+
+        let wayfair = refundRow(named: "Wayfair")
+        XCTAssertTrue(wayfair.waitForExistence(timeout: 3))
+        wayfair.swipeLeft()
+
+        let swipeDelete = app.buttons["refundSwipeDelete"]
+        XCTAssertTrue(swipeDelete.waitForExistence(timeout: 2))
+        XCTAssertTrue(swipeDelete.isHittable)
+        XCTAssertEqual(swipeDelete.label, "Delete")
+        swipeDelete.tap()
+
+        XCTAssertTrue(wayfair.waitForNonExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Delete Refund"].exists)
+    }
+
+    func testLongPressShowsRefundPreview() {
+        launchApp(seedSampleData: true)
+
+        let wayfair = refundRow(named: "Wayfair")
+        XCTAssertTrue(wayfair.waitForExistence(timeout: 3))
+        wayfair.press(forDuration: 1)
+
+        // The system context-menu host intentionally replaces custom preview
+        // identifiers, but exposes the preview and all of its combined labels.
+        let preview = app.otherElements["Preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 3))
+        XCTAssertTrue(previewElement(label: "Wayfair", in: preview).exists)
+        XCTAssertTrue(
+            previewElement(label: "Overdue floor lamp", in: preview).exists
+        )
+        XCTAssertTrue(
+            previewElement(containing: "146.75", in: preview).exists
+        )
+        XCTAssertTrue(previewElement(label: "Overdue", in: preview).exists)
+        XCTAssertTrue(
+            previewElement(startingWith: "Expected refund", in: preview).exists
+        )
+        XCTAssertTrue(
+            previewElement(startingWith: "Refund to", in: preview).exists
+        )
+        XCTAssertTrue(
+            previewElement(startingWith: "Order", in: preview).exists
+        )
+
+        let openDetails = app.buttons["refundPreviewOpenDetails"]
+        XCTAssertTrue(openDetails.waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["refundPreviewDelete"].exists)
+        openDetails.tap()
+
+        XCTAssertTrue(app.navigationBars["Refund"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Wayfair"].exists)
+    }
+
     private func launchApp(seedSampleData: Bool = false) {
         app = XCUIApplication()
         app.launchArguments = ["--ui-testing"]
@@ -166,17 +321,26 @@ final class RefundTrackerUITests: XCTestCase {
     private func addRefund(
         retailer: String,
         item: String? = nil,
-        amount: String
+        amount: String,
+        coverOptionIndex: Int? = nil
     ) {
-        let identifiedAddButton = app.buttons["addRefundButton"]
-        let addButton = identifiedAddButton.exists
-            ? identifiedAddButton
-            : app.tabBars.buttons["Add"]
+        let addButton = app.buttons["refunds.addRefund"]
         XCTAssertTrue(addButton.waitForExistence(timeout: 2))
         addButton.tap()
 
         let retailerField = app.textFields["retailerField"]
         XCTAssertTrue(retailerField.waitForExistence(timeout: 2))
+
+        if let coverOptionIndex {
+            let pickerButton = app.buttons["coverEmojiPickerButton"]
+            XCTAssertTrue(pickerButton.waitForExistence(timeout: 2))
+            pickerButton.tap()
+
+            let option = app.buttons["coverEmojiOption_\(coverOptionIndex)"]
+            XCTAssertTrue(option.waitForExistence(timeout: 2))
+            option.tap()
+        }
+
         retailerField.tap()
         retailerField.typeText(retailer)
 
@@ -202,15 +366,16 @@ final class RefundTrackerUITests: XCTestCase {
         doneButton.tap()
     }
 
-    /// The Settings summary card, e.g. "EUR · 10 business days". The picker
-    /// lists "EUR · €" for the same code, so match the trailing copy too and
-    /// keep this from passing against a picker that is still on screen.
-    private func heroSummary(for currencyCode: String) -> XCUIElement {
-        app.staticTexts
+    /// The Settings row that opens the currency picker, carrying the selected
+    /// code as its value. The picker lists the same codes, so callers confirm
+    /// it has closed before matching on this.
+    private func defaultCurrencyRow(showing currencyCode: String) -> XCUIElement {
+        app.buttons
             .matching(
                 NSPredicate(
-                    format: "label BEGINSWITH %@ AND label CONTAINS 'business'",
-                    "\(currencyCode) · "
+                    format: "identifier == %@ AND label CONTAINS %@",
+                    "settings.defaultCurrency",
+                    currencyCode
                 )
             )
             .firstMatch
@@ -239,6 +404,33 @@ final class RefundTrackerUITests: XCTestCase {
 
     private func staticText(startingWith text: String) -> XCUIElement {
         app.staticTexts
+            .matching(NSPredicate(format: "label BEGINSWITH %@", text))
+            .firstMatch
+    }
+
+    private func previewElement(
+        label: String,
+        in preview: XCUIElement
+    ) -> XCUIElement {
+        preview.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", label))
+            .firstMatch
+    }
+
+    private func previewElement(
+        containing text: String,
+        in preview: XCUIElement
+    ) -> XCUIElement {
+        preview.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", text))
+            .firstMatch
+    }
+
+    private func previewElement(
+        startingWith text: String,
+        in preview: XCUIElement
+    ) -> XCUIElement {
+        preview.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH %@", text))
             .firstMatch
     }

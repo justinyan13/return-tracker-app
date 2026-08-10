@@ -18,17 +18,33 @@ struct RefundTrackingEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("Tracking number", text: $trackingNumber)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("detailTrackingNumberField")
-                    TextField("Return carrier", text: $carrier)
-                        .textInputAutocapitalization(.words)
-                        .accessibilityIdentifier("detailReturnCarrierField")
-                } footer: {
-                    Text("You can update these details at any point in the return.")
+            ZStack {
+                RefundBackdrop()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        RefundFormField(label: "Tracking number") {
+                            TextField("Tracking number", text: $trackingNumber)
+                                .textInputAutocapitalization(.characters)
+                                .autocorrectionDisabled()
+                                .font(.system(.callout).monospaced())
+                                .accessibilityIdentifier("detailTrackingNumberField")
+                        }
+
+                        RefundFormField(label: "Return carrier") {
+                            TextField("Return carrier", text: $carrier)
+                                .textInputAutocapitalization(.words)
+                                .font(.system(.body))
+                                .accessibilityIdentifier("detailReturnCarrierField")
+                        }
+
+                        Text("You can update these details at any point in the return.")
+                            .font(.system(.footnote))
+                            .foregroundStyle(RefundTheme.inkSoft)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
                 }
             }
             .navigationTitle("Return tracking")
@@ -48,6 +64,8 @@ struct RefundTrackingEditor: View {
             }
         }
         .presentationDetents([.medium])
+        .presentationCornerRadius(6)
+        .tint(RefundTheme.ink)
     }
 }
 
@@ -63,14 +81,23 @@ struct RefundNotesEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField(
-                    "Confirmation details, contact history, or anything else",
-                    text: $notes,
-                    axis: .vertical
-                )
-                .lineLimit(8...16)
-                .accessibilityIdentifier("detailNotesField")
+            ZStack {
+                RefundBackdrop()
+
+                ScrollView {
+                    RefundFormField(label: "Notes") {
+                        TextField(
+                            "Confirmation details, contact history, or anything else",
+                            text: $notes,
+                            axis: .vertical
+                        )
+                        .lineLimit(8...16)
+                        .font(.system(.callout))
+                        .accessibilityIdentifier("detailNotesField")
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                }
             }
             .navigationTitle("Notes")
             .navigationBarTitleDisplayMode(.inline)
@@ -89,5 +116,7 @@ struct RefundNotesEditor: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .presentationCornerRadius(6)
+        .tint(RefundTheme.ink)
     }
 }

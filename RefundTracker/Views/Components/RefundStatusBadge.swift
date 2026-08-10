@@ -1,27 +1,22 @@
 import SwiftUI
 
+/// A dot and a letterspaced word. Status used to be a tinted capsule per state,
+/// which put five competing colours in a single list.
 struct RefundStatusBadge: View {
     let status: RefundStatus
 
     var body: some View {
-        Label {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(status.markColor)
+                .frame(width: 5, height: 5)
+
             Text(compactTitle)
+                .eyebrow(size: 10, color: status.labelColor)
                 .lineLimit(1)
-        } icon: {
-            Image(systemName: status.symbolName)
-                .font(.caption2.weight(.heavy))
-        }
-        .font(.caption2.weight(.heavy))
-        .foregroundStyle(status.foregroundColor)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(status.backgroundColor, in: Capsule())
-        .overlay {
-            Capsule()
-                .stroke(status.badgeTint.opacity(0.24), lineWidth: 1)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Status: \(status.title)")
+        .accessibilityLabel(status.title)
     }
 
     private var compactTitle: String {
@@ -29,7 +24,7 @@ struct RefundStatusBadge: View {
         case .deliveredToRetailer:
             "Delivered"
         case .preparingReturn:
-            "Preparing"
+            "To send"
         case .refundPending:
             "Pending"
         default:
@@ -47,37 +42,30 @@ extension RefundStatus {
         iconName
     }
 
-    var foregroundColor: Color {
+    /// The dot. Only lateness and arrival earn a colour.
+    var markColor: Color {
         switch self {
         case .refunded:
-            .green
-        case .overdue:
-            .red
-        case .disputed:
-            .orange
+            RefundTheme.success
+        case .overdue, .disputed:
+            RefundTheme.alert
         case .cancelled:
-            .secondary
+            RefundTheme.inkFaint
         case .preparingReturn, .shipped, .deliveredToRetailer, .refundPending:
-            RefundTheme.violet
+            RefundTheme.ink
         }
     }
 
-    var backgroundColor: Color {
-        badgeTint.opacity(0.13)
-    }
-
-    var badgeTint: Color {
+    var labelColor: Color {
         switch self {
         case .refunded:
-            RefundTheme.mint
-        case .overdue:
-            RefundTheme.coral
-        case .disputed:
-            RefundTheme.mango
+            RefundTheme.success
+        case .overdue, .disputed:
+            RefundTheme.alert
         case .cancelled:
-            .secondary
+            RefundTheme.inkFaint
         case .preparingReturn, .shipped, .deliveredToRetailer, .refundPending:
-            RefundTheme.violet
+            RefundTheme.inkSoft
         }
     }
 }

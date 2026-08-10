@@ -5,7 +5,7 @@ import Observation
 @Observable
 final class RefundListViewModel {
     var searchText = ""
-    var selectedScope: RefundFilterScope = .all
+    var selectedScope: RefundFilterScope = .active
     var sortOption: RefundSortOption = .expectedRefundDate
     var sortDirection: RefundSortDirection = .ascending
     var selectedRetailer: String?

@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Empty states are a headline, a line of explanation, and one action — set on
+/// paper rather than around a gradient tile.
 struct RefundWorkflowEmptyState: View {
     enum Kind {
         case firstRefund
@@ -10,76 +12,62 @@ struct RefundWorkflowEmptyState: View {
     var addAction: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: symbolName)
-                .font(.system(size: 42, weight: .semibold))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.white)
-                .frame(width: 94, height: 94)
-                .background(
-                    LinearGradient(
-                        colors: tintColors,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 28, style: .continuous)
-                )
-                .shadow(color: tintColors[0].opacity(0.25), radius: 18, y: 11)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(eyebrow)
+                .eyebrow()
 
             Text(title)
-                .font(.title2.bold())
-                .multilineTextAlignment(.center)
+                .serif(32, relativeTo: .largeTitle)
+                .foregroundStyle(RefundTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 14)
+
+            Hairline()
+                .padding(.top, 22)
 
             Text(message)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                .font(.system(.subheadline))
+                .foregroundStyle(RefundTheme.inkSoft)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 18)
 
             if let addAction, kind == .firstRefund {
-                Button(action: addAction) {
-                    Label("Track a refund", systemImage: "plus")
-                }
-                .buttonStyle(RefundPrimaryButtonStyle())
-                .accessibilityIdentifier("emptyStateAddRefundButton")
+                Button("Track a refund", action: addAction)
+                    .buttonStyle(RefundPrimaryButtonStyle())
+                    .padding(.top, 30)
+                    .accessibilityIdentifier("emptyStateAddRefundButton")
             }
         }
-        .refundGlassCard(tint: tintColors[0], padding: 24)
-        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.top, 40)
+    }
+
+    private var eyebrow: String {
+        switch kind {
+        case .firstRefund:
+            "Nothing tracked yet"
+        case .noResults:
+            "No matches"
+        }
     }
 
     private var title: String {
         switch kind {
         case .firstRefund:
-            "Your money radar is empty"
+            "Every return, in one place."
         case .noResults:
-            "Nothing hiding here"
+            "Nothing here."
         }
     }
 
     private var message: String {
         switch kind {
         case .firstRefund:
-            "Add a merchant and amount. We’ll take care of the dates and keep watch."
+            "Add a merchant and an amount. The dates take care of themselves."
         case .noResults:
-            "Try a different search or loosen the filters."
-        }
-    }
-
-    private var symbolName: String {
-        switch kind {
-        case .firstRefund:
-            "arrow.uturn.backward"
-        case .noResults:
-            "binoculars.fill"
-        }
-    }
-
-    private var tintColors: [Color] {
-        switch kind {
-        case .firstRefund:
-            [RefundTheme.violet, RefundTheme.blue]
-        case .noResults:
-            [RefundTheme.mango, RefundTheme.coral]
+            "Try another search, or loosen the filters."
         }
     }
 }

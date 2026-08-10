@@ -27,30 +27,24 @@ struct SettingsView: View {
 
                 ScrollView {
                     // A plain VStack, not lazy: the whole screen is a handful
-                    // of cards, and a lazy container rebuilds rows as the
+                    // of sections, and a lazy container rebuilds rows as the
                     // selection changes, which is what broke the pushed
                     // currency picker.
-                    VStack(alignment: .leading, spacing: 18) {
-                        SettingsDefaultsHero(
-                            currencyCode: settings.defaultCurrencyCode,
-                            expectedDays: settings.defaultExpectedRefundBusinessDays
-                        )
-
-                        defaultsCard
-                        remindersCard
-                        appearanceCard
-                        dataCard
-                        resetCard
-                        aboutCard
+                    VStack(alignment: .leading, spacing: 40) {
+                        defaultsSection
+                        remindersSection
+                        appearanceSection
+                        dataSection
+                        resetSection
+                        aboutSection
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
-                    .padding(.bottom, 28)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 8)
+                    .padding(.bottom, 44)
                 }
-                .tint(RefundTheme.violet)
+                .tint(RefundTheme.ink)
             }
-            .navigationTitle("Make it yours")
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .navigationTitle("Settings")
             // Owned by the stack rather than by a row inside the scroll view.
             // As a `NavigationLink` destination, picking a currency rewrote
             // the row that owned the link, detaching the screen already on
@@ -99,20 +93,15 @@ struct SettingsView: View {
         }
     }
 
-    private var defaultsCard: some View {
+    private var defaultsSection: some View {
         @Bindable var settings = settings
 
-        return SettingsCard(
-            title: "Set it once",
-            subtitle: "New refunds start with these.",
-            symbol: "slider.horizontal.3",
-            tint: RefundTheme.violet,
+        return SettingsSection(
+            title: "Defaults",
             footer: "Business days exclude Saturdays and Sundays."
         ) {
             SettingsStepperRow(
                 title: "Expected refund window",
-                symbol: "calendar.badge.clock",
-                tint: RefundTheme.blue,
                 valueLabel: "\(settings.defaultExpectedRefundBusinessDays) business \(settings.defaultExpectedRefundBusinessDays == 1 ? "day" : "days")",
                 hint: "Sets the suggested expected date for new refunds",
                 value: $settings.defaultExpectedRefundBusinessDays,
@@ -122,37 +111,28 @@ struct SettingsView: View {
             Button {
                 isShowingCurrencyPicker = true
             } label: {
-                SettingsRow {
-                    SettingsRowLabel(
-                        title: "Default currency",
-                        symbol: "banknote",
-                        tint: RefundTheme.mint,
-                        value: settings.defaultCurrencyCode,
-                        showsChevron: true
-                    )
-                }
+                SettingsRowLabel(
+                    title: "Default currency",
+                    value: settings.defaultCurrencyCode,
+                    showsChevron: true
+                )
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("settings.defaultCurrency")
         }
     }
 
-    private var remindersCard: some View {
+    private var remindersSection: some View {
         @Bindable var settings = settings
 
-        return SettingsCard(
-            title: "Gentle nudges",
-            subtitle: "Reminders while you wait.",
-            symbol: "bell.badge.fill",
-            tint: RefundTheme.blue,
+        return SettingsSection(
+            title: "Reminders",
             footer: settings.notificationsEnabled
                 ? "Reminder timing updates automatically when a refund changes."
                 : "Permission is requested only when you turn reminders on."
         ) {
             SettingsToggleRow(
                 title: "Refund reminders",
-                symbol: "bell.fill",
-                tint: RefundTheme.mango,
                 identifier: "settings.notifications",
                 isBusy: isRequestingNotifications,
                 isOn: Binding(
@@ -167,8 +147,6 @@ struct SettingsView: View {
             if settings.notificationsEnabled {
                 SettingsStepperRow(
                     title: "Early reminder",
-                    symbol: "clock.arrow.circlepath",
-                    tint: RefundTheme.blue,
                     valueLabel: earlyReminderLabel(settings.remindBeforeDays),
                     value: $settings.remindBeforeDays,
                     range: 0 ... 30
@@ -176,23 +154,17 @@ struct SettingsView: View {
 
                 SettingsToggleRow(
                     title: "On expected date",
-                    symbol: "calendar.badge.checkmark",
-                    tint: RefundTheme.mint,
                     isOn: $settings.remindOnExpectedDate
                 )
 
                 SettingsToggleRow(
                     title: "When overdue",
-                    symbol: "exclamationmark.circle.fill",
-                    tint: RefundTheme.coral,
                     isOn: $settings.remindWhenOverdue
                 )
 
                 if settings.remindWhenOverdue {
                     SettingsStepperRow(
                         title: "Overdue follow-up",
-                        symbol: "arrow.clockwise",
-                        tint: RefundTheme.coral,
                         valueLabel: "\(settings.overdueFollowUpDays) \(settings.overdueFollowUpDays == 1 ? "day" : "days") later",
                         value: $settings.overdueFollowUpDays,
                         range: 1 ... 30
@@ -202,53 +174,46 @@ struct SettingsView: View {
         }
     }
 
-    private var appearanceCard: some View {
+    private var appearanceSection: some View {
         @Bindable var settings = settings
 
-        return SettingsCard(
-            title: "Pick a mood",
-            subtitle: "Match iOS, or lock it in.",
-            symbol: "paintpalette.fill",
-            tint: RefundTheme.pink
-        ) {
-            Picker("Theme", selection: $settings.appearance) {
+        return SettingsSection(title: "Appearance") {
+            HStack(spacing: 26) {
                 ForEach(AppAppearance.allCases) { appearance in
-                    Text(appearance.displayName)
-                        .tag(appearance)
+                    RefundChoice(
+                        title: appearance.displayName,
+                        isSelected: settings.appearance == appearance
+                    ) {
+                        settings.appearance = appearance
+                    }
                 }
+
+                Spacer(minLength: 0)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            .padding(.vertical, 16)
             .accessibilityLabel("App appearance")
         }
     }
 
-    private var dataCard: some View {
-        SettingsCard(
+    private var dataSection: some View {
+        SettingsSection(
             title: "Your data",
-            subtitle: "Take it with you, or explore with samples.",
-            symbol: "tray.full.fill",
-            tint: RefundTheme.mango,
             footer: "Sample records are never added automatically. Resetting samples does not affect refunds you created."
         ) {
             Button {
                 exportCSV()
             } label: {
-                SettingsRow {
-                    SettingsRowLabel(
-                        title: "Export refunds as CSV",
-                        symbol: "square.and.arrow.up",
-                        tint: RefundTheme.blue,
-                        detail: refunds.isEmpty
-                            ? "No records to export"
-                            : "\(refunds.count) \(refunds.count == 1 ? "record" : "records")",
-                        showsChevron: !refunds.isEmpty
-                    )
-                }
+                SettingsRowLabel(
+                    title: "Export refunds as CSV",
+                    detail: refunds.isEmpty
+                        ? "No records to export"
+                        : "\(refunds.count) \(refunds.count == 1 ? "record" : "records")",
+                    showsChevron: !refunds.isEmpty
+                )
             }
             .buttonStyle(.plain)
             .disabled(refunds.isEmpty)
-            .opacity(refunds.isEmpty ? 0.55 : 1)
+            .opacity(refunds.isEmpty ? 0.5 : 1)
             .accessibilityIdentifier("settings.exportCSV")
 
             Button {
@@ -258,72 +223,42 @@ struct SettingsView: View {
                     loadSampleData()
                 }
             } label: {
-                SettingsRow {
-                    SettingsRowLabel(
-                        title: refunds.contains(where: \.isSampleData)
-                            ? "Reset sample data"
-                            : "Load sample data",
-                        symbol: "sparkles",
-                        tint: RefundTheme.violet,
-                        detail: "Five realistic refund scenarios",
-                        showsChevron: true
-                    )
-                }
+                SettingsRowLabel(
+                    title: refunds.contains(where: \.isSampleData)
+                        ? "Reset sample data"
+                        : "Load sample data",
+                    detail: "Five realistic refund scenarios",
+                    showsChevron: true
+                )
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("settings.sampleData")
         }
     }
 
-    private var resetCard: some View {
-        SettingsCard(
-            title: "Start fresh",
-            subtitle: "Send every preference back to its default.",
-            symbol: "arrow.counterclockwise",
-            tint: RefundTheme.coral
-        ) {
+    private var resetSection: some View {
+        SettingsSection(title: "Start fresh") {
             Button(role: .destructive) {
                 pendingConfirmation = .resetSettings
             } label: {
-                SettingsRow {
-                    SettingsRowLabel(
-                        title: "Restore default settings",
-                        symbol: "arrow.counterclockwise",
-                        tint: RefundTheme.coral,
-                        titleColor: RefundTheme.coral
-                    )
-                }
+                SettingsRowLabel(
+                    title: "Restore default settings",
+                    titleColor: RefundTheme.alert,
+                    showsChevron: true
+                )
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("settings.restoreDefaults")
         }
     }
 
-    private var aboutCard: some View {
-        SettingsCard(
+    private var aboutSection: some View {
+        SettingsSection(
             title: "About",
-            subtitle: "Where things live.",
-            symbol: "info.circle.fill",
-            tint: RefundTheme.violet,
             footer: "Refund Tracker stores records and attachments locally on this device."
         ) {
-            SettingsRow {
-                SettingsRowLabel(
-                    title: "Version",
-                    symbol: "app.badge",
-                    tint: RefundTheme.violet,
-                    value: appVersion
-                )
-            }
-
-            SettingsRow {
-                SettingsRowLabel(
-                    title: "Data storage",
-                    symbol: "iphone",
-                    tint: RefundTheme.mint,
-                    value: "On device"
-                )
-            }
+            SettingsRowLabel(title: "Version", value: appVersion)
+            SettingsRowLabel(title: "Data storage", value: "On device")
         }
     }
 
@@ -371,14 +306,9 @@ struct SettingsView: View {
     }
 
     private var appVersion: String {
-        let shortVersion = Bundle.main.object(
+        Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "1.0"
-        let build = Bundle.main.object(
-            forInfoDictionaryKey: "CFBundleVersion"
-        ) as? String
-        guard let build, build != shortVersion else { return shortVersion }
-        return "\(shortVersion) (\(build))"
+        ) as? String ?? "1.0.0"
     }
 
     private func earlyReminderLabel(_ days: Int) -> String {
@@ -486,54 +416,76 @@ struct SettingsView: View {
     }
 }
 
-/// A glass card carrying one group of preferences, so Settings reads with the
-/// same section rhythm as the dashboard, insights, and refund screens.
-private struct SettingsCard<Content: View>: View {
+/// One group of preferences: an eyebrow, a rule, and rows divided by hairlines.
+/// The card-per-group treatment made a settings screen look like a dashboard.
+private struct SettingsSection<Content: View>: View {
     let title: String
-    var subtitle: String? = nil
-    let symbol: String
-    var tint: Color = RefundTheme.violet
     var footer: String? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            RefundSectionHeading(
-                title: title,
-                subtitle: subtitle,
-                symbol: symbol
-            )
+        VStack(alignment: .leading, spacing: 0) {
+            RefundSectionHeading(title: title)
 
-            VStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 0) {
                 content
             }
 
             if let footer {
                 Text(footer)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(.caption))
+                    .foregroundStyle(RefundTheme.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 14)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .refundGlassCard(tint: tint, padding: 18)
     }
 }
 
-/// Matches the field treatment used by the refund form, so a control looks the
-/// same whether it is editing a refund or a preference.
-private struct SettingsRow<Content: View>: View {
-    @ViewBuilder var content: Content
+private struct SettingsRowLabel: View {
+    let title: String
+    var titleColor: Color? = nil
+    var value: String? = nil
+    var detail: String? = nil
+    var showsChevron = false
 
     var body: some View {
-        content
-            .padding(.horizontal, 14)
-            .frame(minHeight: 52)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                Color(uiColor: .secondarySystemGroupedBackground).opacity(0.82),
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(.subheadline))
+                    .foregroundStyle(titleColor ?? RefundTheme.ink)
+
+                if let detail {
+                    Text(detail)
+                        .font(.system(.caption))
+                        .foregroundStyle(RefundTheme.inkSoft)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if let value {
+                Text(value)
+                    .serif(16, relativeTo: .body)
+                    .foregroundStyle(RefundTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(.caption2).weight(.medium))
+                    .foregroundStyle(RefundTheme.inkFaint)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.vertical, 17)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .settingsRowRule()
     }
 }
 
@@ -543,31 +495,32 @@ private struct SettingsRow<Content: View>: View {
 /// keeps the control hit-testable.
 private struct SettingsToggleRow: View {
     let title: String
-    let symbol: String
-    var tint: Color = RefundTheme.violet
     var identifier: String? = nil
     var isBusy = false
     @Binding var isOn: Bool
 
     var body: some View {
-        SettingsRow {
-            HStack(spacing: 12) {
-                SettingsRowLabel(title: title, symbol: symbol, tint: tint)
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(.subheadline))
+                .foregroundStyle(RefundTheme.ink)
 
-                if isBusy {
-                    ProgressView()
-                        .controlSize(.small)
-                        .accessibilityLabel(
-                            "Requesting notification permission"
-                        )
-                }
+            Spacer(minLength: 8)
 
-                Toggle("", isOn: $isOn)
-                    .labelsHidden()
-                    .accessibilityLabel(title)
-                    .accessibilityIdentifier(identifier ?? "")
+            if isBusy {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Requesting notification permission")
             }
+
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .tint(RefundTheme.ink)
+                .accessibilityLabel(title)
+                .accessibilityIdentifier(identifier ?? "")
         }
+        .padding(.vertical, 12)
+        .settingsRowRule()
     }
 }
 
@@ -577,149 +530,51 @@ private struct SettingsToggleRow: View {
 /// own line and pairing the value with the control keeps both readable.
 private struct SettingsStepperRow: View {
     let title: String
-    let symbol: String
-    var tint: Color = RefundTheme.violet
     let valueLabel: String
     var hint: String? = nil
     @Binding var value: Int
     let range: ClosedRange<Int>
 
     var body: some View {
-        SettingsRow {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 30, height: 30)
-                    .background(
-                        tint.opacity(0.13),
-                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    )
-                    .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(.subheadline))
+                .foregroundStyle(RefundTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    HStack(spacing: 10) {
-                        Text(valueLabel)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(tint)
-                            .monospacedDigit()
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-
-                        Spacer(minLength: 8)
-
-                        Stepper(value: $value, in: range) {
-                            EmptyView()
-                        }
-                        .labelsHidden()
-                        .accessibilityLabel(title)
-                        .accessibilityValue(valueLabel)
-                        .accessibilityHint(hint ?? "")
-                    }
-                }
-            }
-            .padding(.vertical, 12)
-        }
-    }
-}
-
-private struct SettingsRowLabel: View {
-    let title: String
-    let symbol: String
-    var tint: Color = RefundTheme.violet
-    var titleColor: Color? = nil
-    var value: String? = nil
-    var detail: String? = nil
-    var showsChevron = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(tint)
-                .frame(width: 30, height: 30)
-                .background(
-                    tint.opacity(0.13),
-                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                )
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(titleColor ?? .primary)
-
-                if let detail {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            if let value {
-                Text(value)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(tint)
-                    .monospacedDigit()
+            HStack(spacing: 10) {
+                Text(valueLabel)
+                    .serif(16, relativeTo: .body)
+                    .foregroundStyle(RefundTheme.inkSoft)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
+                    .minimumScaleFactor(0.75)
 
-            if showsChevron {
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
+                Spacer(minLength: 8)
+
+                Stepper(value: $value, in: range) {
+                    EmptyView()
+                }
+                .labelsHidden()
+                .accessibilityLabel(title)
+                .accessibilityValue(valueLabel)
+                .accessibilityHint(hint ?? "")
             }
         }
+        .padding(.vertical, 16)
+        .settingsRowRule()
     }
 }
 
-private struct SettingsDefaultsHero: View {
-    let currencyCode: String
-    let expectedDays: Int
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: "wand.and.stars")
-                .font(.title.bold())
-                .foregroundStyle(.white)
-                .frame(width: 62, height: 62)
-                .background(
-                    LinearGradient(
-                        colors: [RefundTheme.violet, RefundTheme.pink],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-                )
-                .shadow(color: RefundTheme.violet.opacity(0.28), radius: 12, y: 7)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Your shortcut")
-                    .font(.title3.bold())
-
-                Text(
-                    "\(currencyCode) · \(expectedDays) business \(expectedDays == 1 ? "day" : "days")"
-                )
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(RefundTheme.violet)
-
-                Text("Used automatically every time you add a refund.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 0)
+private extension View {
+    /// Closes a settings row with a hairline, so a section reads as a ruled
+    /// list rather than a stack of separate controls.
+    func settingsRowRule() -> some View {
+        overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(RefundTheme.line)
+                .frame(height: RefundTheme.hairline)
         }
-        .refundGlassCard(tint: RefundTheme.violet, padding: 18)
     }
 }
 

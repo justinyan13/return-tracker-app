@@ -10,6 +10,8 @@ struct RefundTrackerApp: App {
     private let isUITesting: Bool
 
     init() {
+        RefundChrome.apply()
+
         let arguments = ProcessInfo.processInfo.arguments
         let isUITesting = arguments.contains("--ui-testing")
         self.isUITesting = isUITesting
@@ -66,6 +68,7 @@ struct RefundTrackerApp: App {
                 startupErrorMessage: startupErrorMessage
             )
             .environment(settings)
+            .tint(RefundTheme.ink)
             .preferredColorScheme(settings.appearance.colorScheme)
         }
         .modelContainer(modelContainer)
@@ -101,8 +104,34 @@ struct RefundTrackerApp: App {
             status: .shipped
         )
 
+        let completed = Refund(
+            retailerName: "Patagonia",
+            itemName: "Completed fleece return",
+            orderNumber: "PAT-620491",
+            refundAmount: 139,
+            currencyCode: "USD",
+            returnDate: calendar.date(
+                byAdding: .day,
+                value: -16,
+                to: today
+            ) ?? today,
+            expectedRefundDate: calendar.date(
+                byAdding: .day,
+                value: -4,
+                to: today
+            ) ?? today,
+            actualRefundDate: calendar.date(
+                byAdding: .day,
+                value: -2,
+                to: today
+            ),
+            refundMethod: .originalPaymentMethod,
+            status: .refunded
+        )
+
         context.insert(overdue)
         context.insert(upcoming)
+        context.insert(completed)
         try? context.save()
     }
 }

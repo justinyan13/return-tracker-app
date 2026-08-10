@@ -9,10 +9,17 @@ enum RefundFilterScope: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
+    static let quickScopes: [RefundFilterScope] = [
+        .active,
+        .overdue,
+        .refunded,
+        .all
+    ]
+
     var displayName: String {
         switch self {
         case .all: "All"
-        case .active: "Active"
+        case .active: "Open"
         case .overdue: "Overdue"
         case .refunded: "Refunded"
         case .disputed: "Disputed"

@@ -64,19 +64,11 @@ struct CurrencyPickerView: View {
                     flag: Self.flag(for: code),
                     isSelected: selection == code
                 )
-                // The stock row fill is opaque and spans the full width, which
-                // hides the backdrop and makes this screen the odd one out.
-                // Carrying the background on the content instead keeps it
-                // inside the row insets, matching the app's card inset.
-                .background(
-                    Color(uiColor: .secondarySystemGroupedBackground)
-                        .opacity(0.82),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
             }
             .buttonStyle(.plain)
-            .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
-            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: 22, bottom: 0, trailing: 22))
+            .listRowSeparatorTint(RefundTheme.line)
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
             .listRowBackground(Color.clear)
             .accessibilityLabel(
                 "\(currencyName(for: code)), \(code)\(selection == code ? ", selected" : "")"
@@ -86,10 +78,9 @@ struct CurrencyPickerView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(RefundBackdrop())
-        .tint(RefundTheme.violet)
+        .tint(RefundTheme.ink)
         .navigationTitle("Default currency")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
         .searchable(text: $searchText, prompt: "Currency or code")
         .overlay {
             if filteredCodes.isEmpty {
@@ -146,31 +137,29 @@ private struct CurrencyRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 13) {
+        HStack(spacing: 14) {
             mark
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(.system(.subheadline))
+                    .foregroundStyle(RefundTheme.ink)
                     .lineLimit(1)
 
                 Text(symbol == code ? code : "\(code) · \(symbol)")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .eyebrow(size: 9)
             }
 
             Spacer(minLength: 8)
 
             if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(RefundTheme.violet)
+                Image(systemName: "checkmark")
+                    .font(.system(.footnote).weight(.medium))
+                    .foregroundStyle(RefundTheme.ink)
                     .accessibilityHidden(true)
             }
         }
-        .padding(.horizontal, 14)
-        .frame(minHeight: 58)
+        .frame(minHeight: 62)
         .contentShape(Rectangle())
     }
 
@@ -178,23 +167,19 @@ private struct CurrencyRow: View {
     private var mark: some View {
         if let flag {
             Text(flag)
-                .font(.system(size: 27))
-                .frame(width: 42, height: 42)
-                .background(
-                    RefundTheme.color(for: code).opacity(0.13),
-                    in: RoundedRectangle(cornerRadius: 13, style: .continuous)
-                )
+                .font(.system(size: 24))
+                .frame(width: 38, height: 38)
+                .background(RefundTheme.sand)
                 .accessibilityHidden(true)
         } else {
             Text(symbol)
-                .font(.system(size: 17, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
+                .serif(15, relativeTo: .body)
+                .foregroundStyle(RefundTheme.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
-                .padding(.horizontal, 4)
-                .frame(width: 42, height: 42)
-                .background(RefundTheme.gradient(for: code))
-                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .padding(.horizontal, 3)
+                .frame(width: 38, height: 38)
+                .background(RefundTheme.sand)
                 .accessibilityHidden(true)
         }
     }

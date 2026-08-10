@@ -20,20 +20,41 @@ final class InsightsViewModel {
         )
     }
 
-    /// Insights never converts between currencies, so a preferred currency with
-    /// no records would render an all-zero screen. Fall back to a currency that
-    /// is actually present, the same way the dashboard picks its headline.
-    func displayCurrencyCode(
+    func outstandingMetrics(
         for refunds: [Refund],
-        preferred: String
+        calendar: Calendar = .current
+    ) -> DashboardMetrics {
+        DashboardCalculator.calculate(
+            refunds: refunds,
+            now: referenceDate,
+            calendar: calendar
+        )
+    }
+
+    /// Completed Insights never converts currencies. If the preferred currency
+    /// has no completed refunds, use one that does instead of showing a false
+    /// all-zero history while another currency has landed.
+    func completedCurrencyCode(
+        for refunds: [Refund],
+        preferred: String,
+        calendar: Calendar = .current
     ) -> String {
         let normalized = preferred.uppercased()
-        let available = Set(refunds.map { $0.currencyCode.uppercased() })
+        let available = Set(
+            refunds
+                .filter {
+                    $0.effectiveStatus(
+                        on: referenceDate,
+                        calendar: calendar
+                    ) == .refunded
+                }
+                .map { $0.currencyCode.uppercased() }
+        )
         guard !available.contains(normalized) else { return normalized }
         return available.sorted().first ?? normalized
     }
 
-    func refresh() {
-        referenceDate = .now
+    func refresh(at date: Date = .now) {
+        referenceDate = date
     }
 }
