@@ -58,7 +58,7 @@ struct RefundRowView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySummary)
-        .accessibilityHint("Opens refund details")
+        .accessibilityHint("Tap for details. Touch and hold for a preview.")
     }
 
     private var isAwaitingShipment: Bool {

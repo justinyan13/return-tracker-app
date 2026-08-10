@@ -15,6 +15,7 @@ struct RefundListView: View {
     @State private var isShowingSearch = false
     @FocusState private var isSearchFocused: Bool
     @State private var refundPendingDeletion: Refund?
+    @State private var deletePromptTask: Task<Void, Never>?
     @State private var errorMessage: String?
 
     private let attachmentStore = AttachmentStore.shared
@@ -122,6 +123,9 @@ struct RefundListView: View {
             ) { _ in
                 dashboardViewModel.refresh()
             }
+            .onDisappear {
+                deletePromptTask?.cancel()
+            }
         }
     }
 
@@ -171,25 +175,52 @@ struct RefundListView: View {
                             referenceDate: dashboardViewModel.referenceDate
                         )
                     }
-                    .buttonStyle(.plain)
+                    .navigationLinkIndicatorVisibility(.hidden)
                     .accessibilityIdentifier(
                         "refundRow_\(refund.id.uuidString)"
                     )
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(
-                            "Delete",
-                            systemImage: "trash",
-                            role: .destructive
-                        ) {
-                            refundPendingDeletion = refund
+                    .contentShape(
+                        .contextMenuPreview,
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+                    .contextMenu {
+                        Button {
+                            navigationPath.append(refund.id)
+                        } label: {
+                            Label(
+                                "Open details",
+                                systemImage: "arrow.up.right.square"
+                            )
                         }
+                        .accessibilityIdentifier("refundPreviewOpenDetails")
+
+                        Button(role: .destructive) {
+                            requestDeletion(of: refund)
+                        } label: {
+                            Label("Delete", systemImage: "trash.fill")
+                        }
+                        .accessibilityIdentifier("refundPreviewDelete")
+                    } preview: {
+                        RefundPreviewView(
+                            refund: refund,
+                            referenceDate: dashboardViewModel.referenceDate
+                        )
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            requestDeletion(of: refund)
+                        } label: {
+                            Label("Delete", systemImage: "trash.fill")
+                        }
+                        .tint(.red)
+                        .accessibilityIdentifier("refundSwipeDelete")
                     }
                     .listRowInsets(
                         EdgeInsets(top: 0, leading: 22, bottom: 0, trailing: 22)
                     )
                     .listRowSeparatorTint(RefundTheme.line)
                     .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(RefundTheme.paper)
                 }
             }
         }
@@ -380,9 +411,23 @@ struct RefundListView: View {
         }
     }
 
+    /// Lets the native swipe or context-menu dismissal finish before presenting
+    /// the confirmation sheet. Presenting it in the same frame makes the row
+    /// snap closed and is especially noticeable on a 120 Hz display.
+    private func requestDeletion(of refund: Refund) {
+        deletePromptTask?.cancel()
+        deletePromptTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return }
+            refundPendingDeletion = refund
+        }
+    }
+
     private func deleteRecord(_ refund: Refund) throws {
-        modelContext.delete(refund)
-        modelContext.processPendingChanges()
+        withAnimation(.smooth(duration: 0.24)) {
+            modelContext.delete(refund)
+            modelContext.processPendingChanges()
+        }
         do {
             try modelContext.save()
         } catch {

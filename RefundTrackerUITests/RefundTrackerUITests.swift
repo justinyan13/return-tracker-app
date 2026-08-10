@@ -253,6 +253,64 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertTrue(refundRow(named: "Patagonia").waitForNonExistence(timeout: 2))
     }
 
+    func testSwipeDeleteFromRefundList() {
+        launchApp(seedSampleData: true)
+
+        let wayfair = refundRow(named: "Wayfair")
+        XCTAssertTrue(wayfair.waitForExistence(timeout: 3))
+        wayfair.swipeLeft()
+
+        let swipeDelete = app.buttons["refundSwipeDelete"]
+        XCTAssertTrue(swipeDelete.waitForExistence(timeout: 2))
+        XCTAssertTrue(swipeDelete.isHittable)
+        XCTAssertEqual(swipeDelete.label, "Delete")
+        swipeDelete.tap()
+
+        let confirmDelete = app.buttons["Delete Refund"]
+        XCTAssertTrue(confirmDelete.waitForExistence(timeout: 2))
+        confirmDelete.tap()
+
+        XCTAssertTrue(wayfair.waitForNonExistence(timeout: 3))
+    }
+
+    func testLongPressShowsRefundPreview() {
+        launchApp(seedSampleData: true)
+
+        let wayfair = refundRow(named: "Wayfair")
+        XCTAssertTrue(wayfair.waitForExistence(timeout: 3))
+        wayfair.press(forDuration: 1)
+
+        // The system context-menu host intentionally replaces custom preview
+        // identifiers, but exposes the preview and all of its combined labels.
+        let preview = app.otherElements["Preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 3))
+        XCTAssertTrue(previewElement(label: "Wayfair", in: preview).exists)
+        XCTAssertTrue(
+            previewElement(label: "Overdue floor lamp", in: preview).exists
+        )
+        XCTAssertTrue(
+            previewElement(containing: "146.75", in: preview).exists
+        )
+        XCTAssertTrue(previewElement(label: "Overdue", in: preview).exists)
+        XCTAssertTrue(
+            previewElement(startingWith: "Expected refund", in: preview).exists
+        )
+        XCTAssertTrue(
+            previewElement(startingWith: "Refund to", in: preview).exists
+        )
+        XCTAssertTrue(
+            previewElement(startingWith: "Order", in: preview).exists
+        )
+
+        let openDetails = app.buttons["refundPreviewOpenDetails"]
+        XCTAssertTrue(openDetails.waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["refundPreviewDelete"].exists)
+        openDetails.tap()
+
+        XCTAssertTrue(app.navigationBars["Refund"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Wayfair"].exists)
+    }
+
     private func launchApp(seedSampleData: Bool = false) {
         app = XCUIApplication()
         app.launchArguments = ["--ui-testing"]
@@ -351,6 +409,33 @@ final class RefundTrackerUITests: XCTestCase {
 
     private func staticText(startingWith text: String) -> XCUIElement {
         app.staticTexts
+            .matching(NSPredicate(format: "label BEGINSWITH %@", text))
+            .firstMatch
+    }
+
+    private func previewElement(
+        label: String,
+        in preview: XCUIElement
+    ) -> XCUIElement {
+        preview.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", label))
+            .firstMatch
+    }
+
+    private func previewElement(
+        containing text: String,
+        in preview: XCUIElement
+    ) -> XCUIElement {
+        preview.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", text))
+            .firstMatch
+    }
+
+    private func previewElement(
+        startingWith text: String,
+        in preview: XCUIElement
+    ) -> XCUIElement {
+        preview.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH %@", text))
             .firstMatch
     }
