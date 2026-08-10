@@ -74,6 +74,57 @@ final class FilteringSortingTests: XCTestCase {
         )
     }
 
+    func testOpenScopeIncludesEveryUnresolvedStatusOnly() {
+        let upcoming = makeRefund(
+            retailer: "Upcoming",
+            item: "Item",
+            amount: 10,
+            expectedOffset: 4,
+            status: .refundPending
+        )
+        let overdue = makeRefund(
+            retailer: "Overdue",
+            item: "Item",
+            amount: 20,
+            expectedOffset: -2,
+            status: .refundPending
+        )
+        let disputed = makeRefund(
+            retailer: "Disputed",
+            item: "Item",
+            amount: 30,
+            expectedOffset: -3,
+            status: .disputed
+        )
+        let refunded = makeRefund(
+            retailer: "Refunded",
+            item: "Item",
+            amount: 40,
+            expectedOffset: -4,
+            status: .refunded,
+            actualDate: DomainTestSupport.addingDays(-1, to: now)
+        )
+        let cancelled = makeRefund(
+            retailer: "Cancelled",
+            item: "Item",
+            amount: 50,
+            expectedOffset: 5,
+            status: .cancelled
+        )
+
+        let results = RefundQueryService.filter(
+            [upcoming, overdue, disputed, refunded, cancelled],
+            using: RefundFilter(scope: .active),
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(
+            Set(results.map(\.id)),
+            Set([upcoming.id, overdue.id, disputed.id])
+        )
+    }
+
     func testInclusiveDateRange() {
         let first = makeRefund(
             retailer: "First",

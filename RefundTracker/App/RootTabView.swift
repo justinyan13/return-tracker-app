@@ -2,8 +2,7 @@ import SwiftUI
 
 struct RootTabView: View {
     @Environment(AppSettings.self) private var settings
-    private enum Tab: Hashable {
-        case dashboard
+    private enum AppTab: Hashable {
         case refunds
         case add
         case insights
@@ -12,8 +11,8 @@ struct RootTabView: View {
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
-    @State private var selectedTab: Tab = .dashboard
-    @State private var previousTab: Tab = .dashboard
+    @State private var selectedTab: AppTab = .refunds
+    @State private var previousTab: AppTab = .refunds
     @State private var isPresentingAddRefund = false
     @State private var isPresentingOnboarding = false
     @State private var isShowingStartupError = false
@@ -33,46 +32,35 @@ struct RootTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardView {
-                presentAddRefund()
+            Tab(value: AppTab.refunds) {
+                RefundListView(onAddRefund: presentAddRefund)
+            } label: {
+                Label("Refunds", systemImage: "list.clipboard")
+                    .labelStyle(.iconOnly)
             }
-            .id(queryRevision)
-            .tabItem {
-                Image(systemName: "square.stack")
-                    .accessibilityLabel("Overview")
+
+            Tab(value: AppTab.add) {
+                Color.clear
+            } label: {
+                Label("Add", systemImage: "plus")
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("addRefundButton")
             }
-            .tag(Tab.dashboard)
 
-            RefundListView()
-                .id(queryRevision)
-                .tabItem {
-                    Image(systemName: "list.bullet")
-                        .accessibilityLabel("Refunds")
-                }
-                .tag(Tab.refunds)
+            Tab(value: AppTab.insights) {
+                InsightsView()
+                    .id(queryRevision)
+            } label: {
+                Label("Insights", systemImage: "chart.bar.fill")
+                    .labelStyle(.iconOnly)
+            }
 
-            Color.clear
-                .tabItem {
-                    Image(systemName: "plus")
-                        .accessibilityLabel("Add")
-                }
-                .tag(Tab.add)
-                .accessibilityIdentifier("addRefundButton")
-
-            InsightsView()
-                .id(queryRevision)
-                .tabItem {
-                    Image(systemName: "chart.bar")
-                        .accessibilityLabel("Insights")
-                }
-                .tag(Tab.insights)
-
-            SettingsView()
-                .tabItem {
-                    Image(systemName: "slider.horizontal.3")
-                        .accessibilityLabel("Settings")
-                }
-                .tag(Tab.settings)
+            Tab(value: AppTab.settings) {
+                SettingsView()
+            } label: {
+                Label("Settings", systemImage: "slider.horizontal.3")
+                    .labelStyle(.iconOnly)
+            }
         }
         .tint(RefundTheme.ink)
         .tabBarMinimizeBehavior(.onScrollDown)

@@ -1,71 +1,69 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct RefundListView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(\.modelContext) private var modelContext
-    @Query private var refunds: [Refund]
+    @Environment(\.scenePhase) private var scenePhase
+    @Query(sort: \Refund.expectedRefundDate) private var refunds: [Refund]
 
-    @State private var viewModel = RefundListViewModel()
-    @State private var isPresentingAddRefund = false
+    @State private var listViewModel = RefundListViewModel()
+    @State private var dashboardViewModel = DashboardViewModel()
+    @State private var navigationPath: [UUID] = []
     @State private var isPresentingFilters = false
+    @State private var isShowingSearch = false
+    @FocusState private var isSearchFocused: Bool
     @State private var refundPendingDeletion: Refund?
     @State private var errorMessage: String?
 
     private let attachmentStore = AttachmentStore.shared
+    private let onAddRefund: () -> Void
+
+    init(onAddRefund: @escaping () -> Void = {}) {
+        self.onAddRefund = onAddRefund
+    }
 
     private var results: [Refund] {
-        viewModel.results(from: refunds)
+        listViewModel.results(
+            from: refunds,
+            now: dashboardViewModel.referenceDate
+        )
     }
 
     private var retailers: [String] {
-        Array(
-            Set(
-                refunds
-                    .map(\.retailerName)
-                    .filter { !$0.isEmpty }
-            )
-        )
-        .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        RefundQueryService.availableRetailers(in: refunds)
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 RefundBackdrop()
-
-                if refunds.isEmpty {
-                    firstRefundEmptyState
-                } else {
-                    refundList
-                }
+                combinedList
             }
             .navigationTitle("Refunds")
-            .searchable(
-                text: $viewModel.searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "Merchant, order, or tracking"
-            )
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    sortMenu
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isPresentingAddRefund = true
-                    } label: {
+                    Button(action: onAddRefund) {
                         Label("Add refund", systemImage: "plus")
                     }
-                    .accessibilityIdentifier("addRefundButton")
+                    .accessibilityIdentifier("refunds.addRefund")
                 }
             }
-            .sheet(isPresented: $isPresentingAddRefund) {
-                RefundFormView()
+            .navigationDestination(for: UUID.self) { refundID in
+                if let refund = refunds.first(where: { $0.id == refundID }) {
+                    RefundDetailView(
+                        refund: refund,
+                        deleteRecord: deleteRecord
+                    )
                     .environment(settings)
-                    .presentationCornerRadius(6)
+                }
             }
             .sheet(isPresented: $isPresentingFilters) {
-                RefundFilterSheet(viewModel: viewModel, retailers: retailers)
+                RefundFilterSheet(
+                    viewModel: listViewModel,
+                    retailers: retailers
+                )
             }
             .confirmationDialog(
                 "Delete this refund?",
@@ -91,161 +89,281 @@ struct RefundListView: View {
             } message: {
                 Text(errorMessage ?? "Please try again.")
             }
-        }
-    }
-
-    private var firstRefundEmptyState: some View {
-        ScrollView {
-            RefundWorkflowEmptyState(kind: .firstRefund) {
-                isPresentingAddRefund = true
+            .onAppear {
+                dashboardViewModel.refresh()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard newPhase == .active else { return }
+                dashboardViewModel.refresh()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIApplication.significantTimeChangeNotification
+                )
+            ) { _ in
+                dashboardViewModel.refresh()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
+            ) { _ in
+                dashboardViewModel.refresh()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: .NSSystemTimeZoneDidChange
+                )
+            ) { _ in
+                dashboardViewModel.refresh()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: NSLocale.currentLocaleDidChangeNotification
+                )
+            ) { _ in
+                dashboardViewModel.refresh()
             }
         }
     }
 
-    private var refundList: some View {
-        VStack(spacing: 0) {
-            filterBar
+    private var combinedList: some View {
+        List {
+            summaryHeader
+                .listRowInsets(
+                    EdgeInsets(top: 6, leading: 22, bottom: 0, trailing: 22)
+                )
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
 
-            if results.isEmpty {
-                ScrollView {
-                    RefundWorkflowEmptyState(kind: .noResults)
+            listToolsHeader
+                .listRowInsets(
+                    EdgeInsets(top: 0, leading: 22, bottom: 0, trailing: 22)
+                )
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+
+            if isShowingSearch {
+                searchField
+                    .listRowInsets(
+                        EdgeInsets(top: 0, leading: 22, bottom: 0, trailing: 22)
+                    )
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            scopePicker
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+
+            if refunds.isEmpty {
+                RefundWorkflowEmptyState(kind: .firstRefund) {
+                    onAddRefund()
                 }
+                .padding(.bottom, 28)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            } else if results.isEmpty {
+                RefundWorkflowEmptyState(kind: .noResults)
+                    .padding(.bottom, 28)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             } else {
-                List {
-                    Text(resultSummary)
-                        .eyebrow(size: 10)
-                        .padding(.top, 16)
-                        .padding(.bottom, 4)
-                        .listRowInsets(
-                            EdgeInsets(
-                                top: 0,
-                                leading: 22,
-                                bottom: 0,
-                                trailing: 22
-                            )
+                ForEach(results) { refund in
+                    NavigationLink(value: refund.id) {
+                        RefundRowView(
+                            refund: refund,
+                            referenceDate: dashboardViewModel.referenceDate
                         )
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-
-                    ForEach(results) { refund in
-                        NavigationLink {
-                            RefundDetailView(
-                                refund: refund,
-                                deleteRecord: deleteRecord
-                            )
-                            .environment(settings)
-                        } label: {
-                            RefundRowView(refund: refund)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier(
-                            "refundRow_\(refund.id.uuidString)"
-                        )
-                        .swipeActions(
-                            edge: .trailing,
-                            allowsFullSwipe: false
-                        ) {
-                            Button(
-                                "Delete",
-                                systemImage: "trash",
-                                role: .destructive
-                            ) {
-                                refundPendingDeletion = refund
-                            }
-                        }
-                        .listRowInsets(
-                            EdgeInsets(
-                                top: 0,
-                                leading: 22,
-                                bottom: 0,
-                                trailing: 22
-                            )
-                        )
-                        .listRowSeparatorTint(RefundTheme.line)
-                        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                        .listRowBackground(Color.clear)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(
+                        "refundRow_\(refund.id.uuidString)"
+                    )
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(
+                            "Delete",
+                            systemImage: "trash",
+                            role: .destructive
+                        ) {
+                            refundPendingDeletion = refund
+                        }
+                    }
+                    .listRowInsets(
+                        EdgeInsets(top: 0, leading: 22, bottom: 0, trailing: 22)
+                    )
+                    .listRowSeparatorTint(RefundTheme.line)
+                    .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                    .listRowBackground(Color.clear)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
-                .contentMargins(.bottom, 24, for: .scrollContent)
-                .accessibilityIdentifier("refundList")
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+        .contentMargins(.bottom, 24, for: .scrollContent)
+        .refreshable {
+            dashboardViewModel.refresh()
+        }
+        .accessibilityIdentifier("refundList")
     }
 
-    private var filterBar: some View {
-        VStack(spacing: 0) {
-            ScrollView(.horizontal) {
-                HStack(spacing: 22) {
-                    ForEach(RefundFilterScope.allCases) { filter in
-                        RefundScopeTab(
-                            title: filter.displayName,
-                            isSelected: viewModel.selectedScope == filter
-                        ) {
-                            withAnimation(.snappy(duration: 0.2)) {
-                                viewModel.selectedScope = filter
-                            }
-                        }
-                        .accessibilityIdentifier(
-                            filter == .overdue
-                                ? "filterOverdueButton"
-                                : "\(filter.rawValue)RefundFilterButton"
-                        )
-                    }
+    private var summaryHeader: some View {
+        let metrics = dashboardViewModel.metrics(for: refunds)
+        let preferredCurrency = settings.defaultCurrencyCode.uppercased()
+        let primaryCurrency = metrics.awaitingAmountsByCurrency[preferredCurrency] != nil
+            ? preferredCurrency
+            : metrics.awaitingAmountsByCurrency.keys.sorted().first
+                ?? preferredCurrency
 
-                    VerticalHairline(height: 14)
+        return RefundSummaryHeader(
+            amount: metrics.awaitingAmountsByCurrency[primaryCurrency] ?? 0,
+            currencyCode: primaryCurrency,
+            otherAmounts: metrics.awaitingAmountsByCurrency.filter {
+                $0.key.caseInsensitiveCompare(primaryCurrency) != .orderedSame
+            },
+            openCount: metrics.openReturnCount,
+            overdueCount: metrics.overdueRefundCount,
+            refundedCount: metrics.refundedCount
+        )
+    }
 
-                    RefundScopeTab(
-                        title: "Filters",
-                        count: viewModel.hasAdvancedFilters
-                            ? viewModel.appliedFilterCount
-                                - (viewModel.selectedScope == .all ? 0 : 1)
-                            : 0,
-                        isSelected: viewModel.hasAdvancedFilters
-                    ) {
-                        isPresentingFilters = true
-                    }
-                    .accessibilityIdentifier("refundFilterButton")
+    private var listToolsHeader: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .center, spacing: 16) {
+                Text("Returns")
+                    .eyebrow(color: RefundTheme.ink)
+
+                Spacer(minLength: 12)
+
+                Button(action: toggleSearch) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 17, weight: .regular))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 13)
+                .buttonStyle(.plain)
+                .foregroundStyle(
+                    isShowingSearch ? RefundTheme.ink : RefundTheme.inkSoft
+                )
+                .accessibilityLabel(
+                    isShowingSearch ? "Close search" : "Search refunds"
+                )
+                .accessibilityIdentifier("refundSearchButton")
+
+                filterAndSortMenu
             }
-            .scrollIndicators(.hidden)
+
+            Hairline(color: RefundTheme.lineStrong)
+        }
+        .padding(.top, 32)
+    }
+
+    private var searchField: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(RefundTheme.inkFaint)
+                    .accessibilityHidden(true)
+
+                TextField(
+                    "Merchant, item, order, or tracking",
+                    text: $listViewModel.searchText
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($isSearchFocused)
+                .accessibilityIdentifier("refundSearchField")
+
+                if !listViewModel.searchText.isEmpty {
+                    Button {
+                        listViewModel.searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(RefundTheme.inkFaint)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                }
+            }
+            .font(.system(.subheadline))
+            .foregroundStyle(RefundTheme.ink)
+            .padding(.vertical, 12)
 
             Hairline()
         }
     }
 
-    private var sortMenu: some View {
+    private var scopePicker: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 22) {
+                ForEach(RefundFilterScope.quickScopes) { scope in
+                    RefundScopeTab(
+                        title: scope.displayName,
+                        isSelected: listViewModel.selectedScope == scope
+                    ) {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            listViewModel.selectedScope = scope
+                        }
+                    }
+                    .accessibilityIdentifier(scope.quickAccessibilityIdentifier)
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 13)
+            .padding(.bottom, 8)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var filterAndSortMenu: some View {
         Menu {
-            Picker("Sort by", selection: $viewModel.sortOption) {
+            Picker("Sort by", selection: $listViewModel.sortOption) {
                 ForEach(RefundSortOption.allCases) { option in
                     Text(option.displayName).tag(option)
                 }
             }
 
-            Divider()
-
-            Picker("Direction", selection: $viewModel.sortDirection) {
+            Picker("Direction", selection: $listViewModel.sortDirection) {
                 Label("Ascending", systemImage: "arrow.up")
                     .tag(RefundSortDirection.ascending)
                 Label("Descending", systemImage: "arrow.down")
                     .tag(RefundSortDirection.descending)
             }
+
+            Divider()
+
+            Button {
+                isPresentingFilters = true
+            } label: {
+                Label(
+                    advancedFilterLabel,
+                    systemImage: "line.3.horizontal.decrease"
+                )
+            }
         } label: {
-            Label("Sort refunds", systemImage: "arrow.up.arrow.down")
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 17, weight: .regular))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
-        .accessibilityIdentifier("refundSortButton")
+        .foregroundStyle(
+            listViewModel.hasAdvancedFilters
+                ? RefundTheme.ink
+                : RefundTheme.inkSoft
+        )
+        .accessibilityLabel("Filter and sort refunds")
+        .accessibilityIdentifier("refundFilterAndSortButton")
     }
 
-    private var resultSummary: String {
-        let count = "\(results.count) \(results.count == 1 ? "return" : "returns")"
-        let scope = viewModel.selectedScope == .all
-            ? "All statuses"
-            : viewModel.selectedScope.displayName
-        return "\(count) · \(scope) · \(viewModel.sortOption.displayName)"
+    private var advancedFilterLabel: String {
+        let count = listViewModel.hasAdvancedFilters
+            ? listViewModel.appliedFilterCount
+                - (listViewModel.selectedScope == .all ? 0 : 1)
+            : 0
+        return count == 0 ? "More filters" : "More filters (\(count))"
     }
 
     private var errorAlertBinding: Binding<Bool> {
@@ -253,6 +371,22 @@ struct RefundListView: View {
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )
+    }
+
+    private func toggleSearch() {
+        withAnimation(.snappy(duration: 0.2)) {
+            isShowingSearch.toggle()
+        }
+
+        if isShowingSearch {
+            Task { @MainActor in
+                await Task.yield()
+                isSearchFocused = true
+            }
+        } else {
+            isSearchFocused = false
+            listViewModel.searchText = ""
+        }
     }
 
     private func deletePendingRefund() {
@@ -285,33 +419,23 @@ struct RefundListView: View {
     }
 }
 
-/// A word with a rule under it when chosen. Replaces the filled gradient pills.
+/// A word with a rule under it when chosen. Replaces filled filter pills.
 private struct RefundScopeTab: View {
     let title: String
-    var count = 0
     var isSelected = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                HStack(spacing: 4) {
-                    Text(title)
-                        .eyebrow(
-                            size: 11,
-                            color: isSelected
-                                ? RefundTheme.ink
-                                : RefundTheme.inkFaint
-                        )
-                        .lineLimit(1)
-
-                    if count > 0 {
-                        Text(count.formatted())
-                            .serif(11, relativeTo: .footnote)
-                            .foregroundStyle(RefundTheme.ink)
-                            .baselineOffset(5)
-                    }
-                }
+                Text(title)
+                    .eyebrow(
+                        size: 11,
+                        color: isSelected
+                            ? RefundTheme.ink
+                            : RefundTheme.inkFaint
+                    )
+                    .lineLimit(1)
 
                 Rectangle()
                     .fill(isSelected ? RefundTheme.ink : .clear)
@@ -321,9 +445,25 @@ private struct RefundScopeTab: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(
-            "\(title) filter\(count > 0 ? ", \(count) options" : "")"
-        )
+        .accessibilityLabel("\(title) filter")
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+private extension RefundFilterScope {
+    var quickAccessibilityIdentifier: String {
+        switch self {
+        case .active:
+            "refundScope.open"
+        case .overdue:
+            "refundScope.overdue"
+        case .refunded:
+            "refundScope.refunded"
+        case .all:
+            "refundScope.all"
+        case .disputed:
+            "refundScope.disputed"
+        }
     }
 }

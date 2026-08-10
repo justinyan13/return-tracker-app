@@ -19,6 +19,27 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Everlane"].waitForExistence(timeout: 3))
     }
 
+    func testCombinedRefundsScreenAndFourIconTabs() {
+        launchApp(seedSampleData: true)
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 3))
+
+        let tabs = tabBar.buttons.allElementsBoundByIndex
+        XCTAssertEqual(tabs.map(\.label), ["Refunds", "Add", "Insights", "Settings"])
+        XCTAssertTrue(tabBar.buttons["Refunds"].isSelected)
+        XCTAssertFalse(tabBar.buttons["Overview"].exists)
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["refundSummary"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["refundList"]
+                .waitForExistence(timeout: 3)
+        )
+    }
+
     func testEditingARefund() {
         launchApp()
         addRefund(retailer: "Nordstrom", amount: "129.00")
@@ -162,13 +183,19 @@ final class RefundTrackerUITests: XCTestCase {
     func testFilteringOverdueRefunds() {
         launchApp(seedSampleData: true)
 
-        app.tabBars.buttons["Refunds"].tap()
-        let overdueFilter = app.buttons["filterOverdueButton"]
+        let openFilter = app.buttons["refundScope.open"]
+        XCTAssertTrue(openFilter.waitForExistence(timeout: 2))
+        XCTAssertTrue(openFilter.isSelected)
+
+        XCTAssertTrue(refundRow(named: "Wayfair").waitForExistence(timeout: 2))
+        XCTAssertTrue(refundRow(named: "Allbirds").waitForExistence(timeout: 2))
+
+        let overdueFilter = app.buttons["refundScope.overdue"]
         XCTAssertTrue(overdueFilter.waitForExistence(timeout: 2))
         overdueFilter.tap()
 
         XCTAssertTrue(refundRow(named: "Wayfair").waitForExistence(timeout: 2))
-        XCTAssertFalse(refundRow(named: "Allbirds").exists)
+        XCTAssertTrue(refundRow(named: "Allbirds").waitForNonExistence(timeout: 2))
     }
 
     func testDeletingARefund() {

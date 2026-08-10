@@ -17,6 +17,18 @@ final class RefundListViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testInitialScopeIsOpenAndQuickScopesUseRequestedOrder() {
+        let viewModel = RefundListViewModel()
+
+        XCTAssertEqual(viewModel.selectedScope, .active)
+        XCTAssertEqual(viewModel.selectedScope.displayName, "Open")
+        XCTAssertEqual(
+            RefundFilterScope.quickScopes,
+            [.active, .overdue, .refunded, .all]
+        )
+    }
+
+    @MainActor
     func testInvertedDateRangeStillMatchesRecords() {
         let inRange = refund(expected: DomainTestSupport.date(2026, 8, 10))
         let outOfRange = refund(expected: DomainTestSupport.date(2026, 9, 20))
