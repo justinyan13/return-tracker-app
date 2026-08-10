@@ -38,20 +38,23 @@ struct RootTabView: View {
             }
             .id(queryRevision)
             .tabItem {
-                Label("Overview", systemImage: "square.stack")
+                Image(systemName: "square.stack")
+                    .accessibilityLabel("Overview")
             }
             .tag(Tab.dashboard)
 
             RefundListView()
                 .id(queryRevision)
                 .tabItem {
-                    Label("Refunds", systemImage: "list.bullet")
+                    Image(systemName: "list.bullet")
+                        .accessibilityLabel("Refunds")
                 }
                 .tag(Tab.refunds)
 
             Color.clear
                 .tabItem {
-                    Label("Add", systemImage: "plus")
+                    Image(systemName: "plus")
+                        .accessibilityLabel("Add")
                 }
                 .tag(Tab.add)
                 .accessibilityIdentifier("addRefundButton")
@@ -59,13 +62,15 @@ struct RootTabView: View {
             InsightsView()
                 .id(queryRevision)
                 .tabItem {
-                    Label("Insights", systemImage: "chart.bar")
+                    Image(systemName: "chart.bar")
+                        .accessibilityLabel("Insights")
                 }
                 .tag(Tab.insights)
 
             SettingsView()
                 .tabItem {
-                    Label("Settings", systemImage: "slider.horizontal.3")
+                    Image(systemName: "slider.horizontal.3")
+                        .accessibilityLabel("Settings")
                 }
                 .tag(Tab.settings)
         }
