@@ -53,6 +53,7 @@ struct RootTabView: View {
             }
         }
         .tint(RefundTheme.ink)
+        .windowAppearance(settings.appearance)
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $isPresentingAddRefund) {
             RefundFormView()

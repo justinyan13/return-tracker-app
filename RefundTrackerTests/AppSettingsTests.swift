@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 @testable import RefundTracker
 
@@ -151,5 +152,14 @@ final class AppSettingsTests: XCTestCase {
                 overdueFollowUpDays: 4
             )
         )
+    }
+
+    /// `.system` has to map to `.unspecified` rather than to a concrete style.
+    /// Mapping it to `.light` looks correct on a light device and quietly
+    /// stops the app following the system on a dark one.
+    func testAppearanceMapsToTheWindowInterfaceStyle() {
+        XCTAssertEqual(AppAppearance.system.userInterfaceStyle, .unspecified)
+        XCTAssertEqual(AppAppearance.light.userInterfaceStyle, .light)
+        XCTAssertEqual(AppAppearance.dark.userInterfaceStyle, .dark)
     }
 }

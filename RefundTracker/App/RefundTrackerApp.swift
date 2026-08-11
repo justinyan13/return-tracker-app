@@ -69,7 +69,6 @@ struct RefundTrackerApp: App {
             )
             .environment(settings)
             .tint(RefundTheme.ink)
-            .preferredColorScheme(settings.appearance.colorScheme)
         }
         .modelContainer(modelContainer)
     }
@@ -133,18 +132,5 @@ struct RefundTrackerApp: App {
         context.insert(upcoming)
         context.insert(completed)
         try? context.save()
-    }
-}
-
-private extension AppAppearance {
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system:
-            nil
-        case .light:
-            .light
-        case .dark:
-            .dark
-        }
     }
 }
