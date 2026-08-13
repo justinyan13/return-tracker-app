@@ -37,17 +37,33 @@ struct RefundNotificationPreferences: Equatable, Sendable {
 final class AppSettings {
     @ObservationIgnored private let defaults: UserDefaults
 
+    // Values that need clamping or normalization are stored privately and
+    // exposed through computed properties. Doing that work in a `didSet` would
+    // recurse forever: the @Observable macro rewrites each stored property into
+    // a computed setter and moves the `didSet` onto its private backing store,
+    // so assigning to the property from its own `didSet` re-enters the setter.
+    private var storedExpectedRefundBusinessDays: Int
+    private var storedCurrencyCode: String
+    private var storedRemindBeforeDays: Int
+    private var storedOverdueFollowUpDays: Int
+
     var defaultExpectedRefundBusinessDays: Int {
-        didSet {
-            defaultExpectedRefundBusinessDays = min(max(defaultExpectedRefundBusinessDays, 1), 60)
-            defaults.set(defaultExpectedRefundBusinessDays, forKey: Keys.defaultExpectedRefundBusinessDays)
+        get { storedExpectedRefundBusinessDays }
+        set {
+            let clamped = Self.clamped(newValue, 1, 60)
+            guard clamped != storedExpectedRefundBusinessDays else { return }
+            storedExpectedRefundBusinessDays = clamped
+            defaults.set(clamped, forKey: Keys.defaultExpectedRefundBusinessDays)
         }
     }
 
     var defaultCurrencyCode: String {
-        didSet {
-            defaultCurrencyCode = Self.normalizedCurrencyCode(defaultCurrencyCode)
-            defaults.set(defaultCurrencyCode, forKey: Keys.defaultCurrencyCode)
+        get { storedCurrencyCode }
+        set {
+            let normalized = Self.normalizedCurrencyCode(newValue)
+            guard normalized != storedCurrencyCode else { return }
+            storedCurrencyCode = normalized
+            defaults.set(normalized, forKey: Keys.defaultCurrencyCode)
         }
     }
 
@@ -56,9 +72,12 @@ final class AppSettings {
     }
 
     var remindBeforeDays: Int {
-        didSet {
-            remindBeforeDays = min(max(remindBeforeDays, 0), 30)
-            defaults.set(remindBeforeDays, forKey: Keys.remindBeforeDays)
+        get { storedRemindBeforeDays }
+        set {
+            let clamped = Self.clamped(newValue, 0, 30)
+            guard clamped != storedRemindBeforeDays else { return }
+            storedRemindBeforeDays = clamped
+            defaults.set(clamped, forKey: Keys.remindBeforeDays)
         }
     }
 
@@ -71,9 +90,12 @@ final class AppSettings {
     }
 
     var overdueFollowUpDays: Int {
-        didSet {
-            overdueFollowUpDays = min(max(overdueFollowUpDays, 1), 30)
-            defaults.set(overdueFollowUpDays, forKey: Keys.overdueFollowUpDays)
+        get { storedOverdueFollowUpDays }
+        set {
+            let clamped = Self.clamped(newValue, 1, 30)
+            guard clamped != storedOverdueFollowUpDays else { return }
+            storedOverdueFollowUpDays = clamped
+            defaults.set(clamped, forKey: Keys.overdueFollowUpDays)
         }
     }
 
@@ -100,17 +122,17 @@ final class AppSettings {
         defaults = userDefaults
 
         let storedWindow = userDefaults.object(forKey: Keys.defaultExpectedRefundBusinessDays) as? Int
-        defaultExpectedRefundBusinessDays = min(max(storedWindow ?? 10, 1), 60)
+        storedExpectedRefundBusinessDays = Self.clamped(storedWindow ?? 10, 1, 60)
 
         let storedCurrency = userDefaults.string(forKey: Keys.defaultCurrencyCode)
-        defaultCurrencyCode = Self.normalizedCurrencyCode(
+        storedCurrencyCode = Self.normalizedCurrencyCode(
             storedCurrency ?? Locale.current.currency?.identifier ?? "USD"
         )
 
         notificationsEnabled = userDefaults.bool(forKey: Keys.notificationsEnabled)
 
         let storedBeforeDays = userDefaults.object(forKey: Keys.remindBeforeDays) as? Int
-        remindBeforeDays = min(max(storedBeforeDays ?? 3, 0), 30)
+        storedRemindBeforeDays = Self.clamped(storedBeforeDays ?? 3, 0, 30)
 
         remindOnExpectedDate =
             userDefaults.object(forKey: Keys.remindOnExpectedDate) as? Bool ?? true
@@ -118,7 +140,7 @@ final class AppSettings {
             userDefaults.object(forKey: Keys.remindWhenOverdue) as? Bool ?? true
 
         let storedFollowUpDays = userDefaults.object(forKey: Keys.overdueFollowUpDays) as? Int
-        overdueFollowUpDays = min(max(storedFollowUpDays ?? 3, 1), 30)
+        storedOverdueFollowUpDays = Self.clamped(storedFollowUpDays ?? 3, 1, 30)
 
         appearance = AppAppearance(
             rawValue: userDefaults.string(forKey: Keys.appearance) ?? ""
@@ -136,11 +158,19 @@ final class AppSettings {
         appearance = .system
     }
 
-    private static func normalizedCurrencyCode(_ code: String) -> String {
+    private static func clamped(_ value: Int, _ lowerBound: Int, _ upperBound: Int) -> Int {
+        min(max(value, lowerBound), upperBound)
+    }
+
+    static func normalizedCurrencyCode(_ code: String) -> String {
         let normalized = code
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased()
-        return normalized.count == 3 ? normalized : "USD"
+        guard normalized.count == 3,
+              normalized.rangeOfCharacter(from: .letters.inverted) == nil else {
+            return "USD"
+        }
+        return normalized
     }
 
     private enum Keys {

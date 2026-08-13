@@ -16,15 +16,22 @@ struct OnboardingView: View {
                 VStack(spacing: 0) {
                     TabView(selection: $selectedPage) {
                         ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                            OnboardingPageView(page: page)
-                                .tag(index)
+                            OnboardingPageView(
+                                page: page,
+                                index: index,
+                                total: pages.count
+                            )
+                            .tag(index)
                         }
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .always))
-                    .indexViewStyle(.page(backgroundDisplayMode: .interactive))
+                    .tabViewStyle(.page(indexDisplayMode: .never))
 
-                    VStack(spacing: 13) {
-                        Button {
+                    VStack(spacing: 18) {
+                        Button(
+                            selectedPage == pages.count - 1
+                                ? "Track a refund"
+                                : "Continue"
+                        ) {
                             if selectedPage == pages.count - 1 {
                                 finishAndAddRefund()
                             } else {
@@ -32,15 +39,6 @@ struct OnboardingView: View {
                                     selectedPage += 1
                                 }
                             }
-                        } label: {
-                            Label(
-                                selectedPage == pages.count - 1
-                                    ? "Track a refund"
-                                    : "Show me",
-                                systemImage: selectedPage == pages.count - 1
-                                    ? "plus"
-                                    : "arrow.right"
-                            )
                         }
                         .buttonStyle(RefundPrimaryButtonStyle())
                         .accessibilityIdentifier("onboarding.primaryAction")
@@ -54,11 +52,10 @@ struct OnboardingView: View {
                                 }
                             }
                         }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .buttonStyle(RefundTextButtonStyle(tint: RefundTheme.inkSoft))
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 20)
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 28)
                 }
             }
             .toolbar {
@@ -66,11 +63,11 @@ struct OnboardingView: View {
                     Button("Skip") {
                         isPresented = false
                     }
-                    .fontWeight(.semibold)
+                    .foregroundStyle(RefundTheme.inkSoft)
                 }
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
         }
+        .tint(RefundTheme.ink)
         .interactiveDismissDisabled()
     }
 
@@ -84,90 +81,59 @@ struct OnboardingView: View {
 
 private struct OnboardingPageView: View {
     let page: OnboardingPage
+    let index: Int
+    let total: Int
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 28) {
-                Spacer(minLength: 44)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(String(format: "%02d", index + 1)) / \(String(format: "%02d", total))")
+                    .eyebrow()
 
-                ZStack {
-                    Circle()
-                        .fill(page.tint.opacity(0.16))
-                        .frame(width: 220, height: 220)
-                        .blur(radius: 2)
+                Text(page.title)
+                    .serif(38, relativeTo: .largeTitle)
+                    .foregroundStyle(RefundTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 18)
 
-                    RoundedRectangle(cornerRadius: 40, style: .continuous)
-                        .fill(page.gradient)
-                        .frame(width: 154, height: 154)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 40, style: .continuous)
-                                .stroke(.white.opacity(0.42), lineWidth: 1)
-                        }
-                        .shadow(color: page.tint.opacity(0.34), radius: 28, y: 18)
+                Hairline()
+                    .padding(.top, 26)
 
-                    Image(systemName: page.systemImage)
-                        .font(.system(size: 65, weight: .semibold))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.white)
+                Text(page.detail)
+                    .font(.system(.callout))
+                    .foregroundStyle(RefundTheme.inkSoft)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 20)
 
-                    Image(systemName: page.floatingSymbol)
-                        .font(.title2.bold())
-                        .foregroundStyle(.white)
-                        .frame(width: 52, height: 52)
-                        .background(RefundTheme.coral, in: Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.5), lineWidth: 1))
-                        .shadow(color: RefundTheme.coral.opacity(0.35), radius: 12, y: 7)
-                        .offset(x: 82, y: -70)
-                }
-                .accessibilityHidden(true)
-
-                VStack(spacing: 12) {
-                    Text(page.eyebrow.uppercased())
-                        .font(.caption.bold())
-                        .tracking(1.3)
-                        .foregroundStyle(page.tint)
-
-                    Text(page.title)
-                        .font(.system(.largeTitle, design: .rounded, weight: .heavy))
-                        .multilineTextAlignment(.center)
-
-                    Text(page.detail)
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
-                }
-
-                VStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(page.highlights, id: \.title) { highlight in
-                        HStack(spacing: 13) {
-                            Image(systemName: highlight.systemImage)
-                                .font(.body.bold())
-                                .foregroundStyle(page.tint)
-                                .frame(width: 38, height: 38)
-                                .background(page.tint.opacity(0.12), in: Circle())
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(highlight.title)
+                                .font(.system(.subheadline).weight(.medium))
+                                .foregroundStyle(RefundTheme.ink)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(highlight.title)
-                                    .font(.headline)
-                                Text(highlight.detail)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
+                            Text(highlight.detail)
+                                .font(.system(.footnote))
+                                .foregroundStyle(RefundTheme.inkSoft)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 18)
                         .accessibilityElement(children: .combine)
+
+                        Hairline()
                     }
                 }
-                .refundGlassCard(tint: page.tint)
+                .padding(.top, 26)
 
-                Label("Private and stored on this iPhone", systemImage: "lock.fill")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                Text("Private · stored on this iPhone")
+                    .eyebrow(size: 9)
+                    .padding(.top, 26)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 60)
+            .padding(.horizontal, 26)
+            .padding(.top, 20)
+            .padding(.bottom, 40)
         }
     }
 }
@@ -176,66 +142,38 @@ private struct OnboardingPage {
     struct Highlight {
         let title: String
         let detail: String
-        let systemImage: String
     }
 
-    let eyebrow: String
     let title: String
     let detail: String
-    let systemImage: String
-    let floatingSymbol: String
-    let tint: Color
-    let gradient: LinearGradient
     let highlights: [Highlight]
 
     static let all: [OnboardingPage] = [
         OnboardingPage(
-            eyebrow: "Delightfully simple",
-            title: "Refunds, minus the spreadsheet",
-            detail: "Merchant, amount, and shipped date. That’s all it takes.",
-            systemImage: "arrow.uturn.backward",
-            floatingSymbol: "dollarsign",
-            tint: RefundTheme.violet,
-            gradient: LinearGradient(
-                colors: [RefundTheme.violet, RefundTheme.blue],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
+            title: "Refunds, minus\nthe spreadsheet.",
+            detail: "Merchant, amount, and the date it went back. That is the whole form.",
             highlights: [
                 Highlight(
                     title: "Add one in seconds",
-                    detail: "No order numbers, tracking codes, or busy forms.",
-                    systemImage: "bolt.fill"
+                    detail: "No order numbers, tracking codes, or busy forms."
                 ),
                 Highlight(
                     title: "Your currency is remembered",
-                    detail: "Set it once and keep moving.",
-                    systemImage: "coloncurrencysign.circle"
+                    detail: "Set it once and keep moving."
                 )
             ]
         ),
         OnboardingPage(
-            eyebrow: "A tiny money radar",
-            title: "Know what’s coming back",
-            detail: "We estimate the date, surface anything late, and celebrate when it lands.",
-            systemImage: "sparkles",
-            floatingSymbol: "checkmark",
-            tint: RefundTheme.mint,
-            gradient: LinearGradient(
-                colors: [RefundTheme.mint, RefundTheme.blue],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
+            title: "Know what is\ncoming back.",
+            detail: "The expected date is worked out for you, and anything late rises to the top.",
             highlights: [
                 Highlight(
                     title: "Dates happen automatically",
-                    detail: "Your expected refund date is calculated for you.",
-                    systemImage: "calendar.badge.clock"
+                    detail: "Your expected refund date is calculated from the day it shipped."
                 ),
                 Highlight(
                     title: "Late refunds stand out",
-                    detail: "One glance tells you what needs a nudge.",
-                    systemImage: "eyes"
+                    detail: "One glance tells you what needs chasing."
                 )
             ]
         )

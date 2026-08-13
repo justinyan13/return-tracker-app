@@ -6,6 +6,7 @@ struct DashboardMetrics {
     let awaitingAmountsByCurrency: [String: Decimal]
     let openReturnCount: Int
     let overdueRefundCount: Int
+    let refundedCount: Int
     let completedThisMonthCount: Int
     let completedThisMonthAmount: Decimal
     let attentionRefunds: [Refund]
@@ -17,6 +18,7 @@ struct DashboardMetrics {
         awaitingAmountsByCurrency: [:],
         openReturnCount: 0,
         overdueRefundCount: 0,
+        refundedCount: 0,
         completedThisMonthCount: 0,
         completedThisMonthAmount: 0,
         attentionRefunds: [],
@@ -54,6 +56,10 @@ enum DashboardCalculator {
 
         let overdue = refunds.filter {
             $0.effectiveStatus(on: now, calendar: calendar) == .overdue
+        }
+
+        let refunded = refunds.filter {
+            $0.effectiveStatus(on: now, calendar: calendar) == .refunded
         }
 
         let completedThisMonth = refunds.filter { refund in
@@ -111,6 +117,7 @@ enum DashboardCalculator {
             awaitingAmountsByCurrency: amountsByCurrency,
             openReturnCount: openRefunds.count,
             overdueRefundCount: overdue.count,
+            refundedCount: refunded.count,
             completedThisMonthCount: completedThisMonth.count,
             completedThisMonthAmount: completedThisMonth.reduce(Decimal.zero) {
                 $1.currencyCode.uppercased() == preferredCurrency

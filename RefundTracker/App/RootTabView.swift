@@ -2,19 +2,16 @@ import SwiftUI
 
 struct RootTabView: View {
     @Environment(AppSettings.self) private var settings
-    private enum Tab: Hashable {
-        case dashboard
+    private enum AppTab: Hashable {
         case refunds
-        case add
         case insights
-        case settings
     }
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
-    @State private var selectedTab: Tab = .dashboard
-    @State private var previousTab: Tab = .dashboard
+    @State private var selectedTab: AppTab = .refunds
     @State private var isPresentingAddRefund = false
+    @State private var isPresentingSettings = false
     @State private var isPresentingOnboarding = false
     @State private var isShowingStartupError = false
     @State private var queryRevision = UUID()
@@ -33,55 +30,36 @@ struct RootTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardView {
-                presentAddRefund()
+            Tab(value: AppTab.refunds) {
+                RefundListView(
+                    onAddRefund: presentAddRefund,
+                    onOpenSettings: presentSettings
+                )
+            } label: {
+                Label("Refunds", systemImage: "list.clipboard")
+                    .labelStyle(.iconOnly)
             }
-            .id(queryRevision)
-            .tabItem {
-                Label("Dashboard", systemImage: "sparkles")
+
+            Tab(value: AppTab.insights) {
+                InsightsView()
+                    .id(queryRevision)
+            } label: {
+                Label("Insights", systemImage: "chart.bar.fill")
+                    .labelStyle(.iconOnly)
             }
-            .tag(Tab.dashboard)
-
-            RefundListView()
-                .id(queryRevision)
-                .tabItem {
-                    Label("Refunds", systemImage: "list.bullet.rectangle")
-                }
-                .tag(Tab.refunds)
-
-            Color.clear
-                .tabItem {
-                    Label("Add", systemImage: "plus.circle.fill")
-                }
-                .tag(Tab.add)
-                .accessibilityIdentifier("addRefundButton")
-
-            InsightsView()
-                .id(queryRevision)
-                .tabItem {
-                    Label("Insights", systemImage: "chart.bar.xaxis")
-                }
-                .tag(Tab.insights)
-
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
-                }
-                .tag(Tab.settings)
         }
-        .tint(RefundTheme.violet)
-        .onChange(of: selectedTab) { oldValue, newValue in
-            guard newValue == .add else {
-                previousTab = newValue
-                return
-            }
-            selectedTab = oldValue == .add ? previousTab : oldValue
-            presentAddRefund()
-        }
+        .tint(RefundTheme.ink)
+        .windowAppearance(settings.appearance)
+        .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $isPresentingAddRefund) {
             RefundFormView()
                 .environment(settings)
-                .presentationCornerRadius(32)
+                .presentationCornerRadius(6)
+        }
+        .sheet(isPresented: $isPresentingSettings) {
+            SettingsView()
+                .environment(settings)
+                .presentationCornerRadius(6)
         }
         .fullScreenCover(isPresented: $isPresentingOnboarding) {
             OnboardingView(isPresented: $isPresentingOnboarding) {
@@ -137,6 +115,10 @@ struct RootTabView: View {
 
     private func presentAddRefund() {
         isPresentingAddRefund = true
+    }
+
+    private func presentSettings() {
+        isPresentingSettings = true
     }
 
     private var reminderErrorBinding: Binding<Bool> {

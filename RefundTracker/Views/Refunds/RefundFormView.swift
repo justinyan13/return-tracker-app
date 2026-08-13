@@ -11,11 +11,14 @@ struct RefundFormView: View {
     @State private var viewModel: RefundFormViewModel
     @State private var didAttemptSave = false
     @State private var didApplySettings = false
+    @State private var isChoosingCoverEmoji = false
+    @State private var isChoosingCurrency = false
     @State private var saveErrorMessage: String?
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
         case merchant
+        case item
         case amount
     }
 
@@ -29,23 +32,52 @@ struct RefundFormView: View {
             ZStack {
                 RefundBackdrop()
 
-                ScrollView {
-                    VStack(spacing: 22) {
-                        if focusedField == nil {
-                            introduction
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            header
+
+                            // Asked first: the answer decides whether the date
+                            // below is a record of what happened or a deadline
+                            // still to meet.
+                            if viewModel.canChooseShipmentState {
+                                shipmentStateField
+                            }
+
+                            merchantField
+                            itemField
+                            amountField
+                            trackedDateField
+
+                            if didAttemptSave && !viewModel.validationMessages.isEmpty {
+                                validationNotice
+                            }
+
+                            saveButton
                         }
-
-                        refundCard
-
-                        if didAttemptSave && !viewModel.validationMessages.isEmpty {
-                            validationCard
-                        }
-
-                        saveButton
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+                        // Slack to scroll into when a field near the bottom
+                        // takes focus.
+                        .padding(.bottom, focusedField == nil ? 32 : 200)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 18)
-                    .padding(.bottom, 28)
+                    .scrollDismissesKeyboard(.interactively)
+                    // Lifting the focused field up keeps the fields *below* it
+                    // above the keyboard, so the next one stays tappable.
+                    //
+                    // The anchor is deliberately not `.top`: the scroll view
+                    // runs underneath the navigation bar, so aligning to the
+                    // very top slides the field up behind the title. This sits
+                    // it just clear of that.
+                    .onChange(of: focusedField) { _, newValue in
+                        guard let newValue else { return }
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(
+                                newValue,
+                                anchor: UnitPoint(x: 0.5, y: 0.14)
+                            )
+                        }
+                    }
                 }
             }
             .navigationTitle(refund == nil ? "Add refund" : "Edit refund")
@@ -65,6 +97,28 @@ struct RefundFormView: View {
                 }
             }
             .interactiveDismissDisabled(hasUnsavedContent)
+            .sheet(isPresented: $isChoosingCoverEmoji) {
+                RefundCoverEmojiPicker(selection: $viewModel.coverEmoji)
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(6)
+            }
+            .sheet(isPresented: $isChoosingCurrency) {
+                NavigationStack {
+                    CurrencyPickerView(
+                        selection: currencyBinding,
+                        title: "Currency"
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") {
+                                isChoosingCurrency = false
+                            }
+                        }
+                    }
+                }
+                .tint(RefundTheme.ink)
+                .presentationCornerRadius(6)
+            }
             .onAppear {
                 applySettingsIfNeeded()
             }
@@ -74,166 +128,185 @@ struct RefundFormView: View {
                 Text(saveErrorMessage ?? "Please try again.")
             }
         }
+        .tint(RefundTheme.ink)
     }
 
-    private var introduction: some View {
-        VStack(spacing: 10) {
-            MerchantMark(
-                name: viewModel.retailerName.isEmpty
-                    ? "Refund"
-                    : viewModel.retailerName,
-                size: 58
-            )
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(refund == nil ? "New return" : "Editing")
+                .eyebrow()
 
-            Text(refund == nil ? "Track money coming back" : "Update this refund")
-                .font(.title2.bold())
-                .multilineTextAlignment(.center)
-
-            Text("Just the essentials. We’ll calculate when the refund should arrive.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            Text(refund == nil ? "What went back?" : "Update the details")
+                .serif(28, relativeTo: .title)
+                .foregroundStyle(RefundTheme.ink)
         }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .contain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 30)
     }
 
-    private var refundCard: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            RefundSectionHeading(
-                title: "Refund details",
-                subtitle: "You can update these details anytime.",
-                symbol: "arrow.uturn.backward.circle.fill"
-            )
+    /// The cover lives beside the item it covers rather than in a row of its
+    /// own: the tile alone is the control, no label needed.
+    private var coverEmojiButton: some View {
+        Button {
+            focusedField = nil
+            isChoosingCoverEmoji = true
+        } label: {
+            RefundCoverMark(emoji: viewModel.coverEmoji, size: 40)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Return cover emoji")
+        .accessibilityValue(viewModel.coverEmoji)
+        .accessibilityHint("Opens the emoji picker")
+        .accessibilityIdentifier("coverEmojiPickerButton")
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                fieldLabel("Merchant name", symbol: "storefront")
-                TextField("Merchant name", text: $viewModel.retailerName)
-                    .textContentType(.organizationName)
-                    .textInputAutocapitalization(.words)
-                    .submitLabel(.next)
-                    .focused($focusedField, equals: .merchant)
-                    .onSubmit { focusedField = .amount }
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 52)
-                    .background(
-                        fieldBackground,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    )
-                    .accessibilityIdentifier("retailerField")
-            }
-            .id(Field.merchant)
-
-            VStack(alignment: .leading, spacing: 8) {
-                fieldLabel("Refund amount", symbol: "banknote")
-
-                HStack(spacing: 12) {
-                    Text(viewModel.currencyCode)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 7)
-                        .background(
-                            LinearGradient(
-                                colors: [RefundTheme.violet, RefundTheme.blue],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            in: Capsule()
-                        )
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Currency \(viewModel.currencyCode)")
-                        .accessibilityIdentifier("currencyChip")
-
-                    TextField("0.00", text: $viewModel.amountText)
-                        .keyboardType(.decimalPad)
-                        .font(.title2.monospacedDigit())
-                        .multilineTextAlignment(.trailing)
-                        .frame(
-                            maxWidth: .infinity,
-                            minHeight: 52,
-                            alignment: .trailing
-                        )
-                        .contentShape(Rectangle())
-                        .focused($focusedField, equals: .amount)
-                        .accessibilityLabel("Refund amount")
-                        .accessibilityIdentifier("amountField")
+    private var shipmentStateField: some View {
+        RefundFormField(label: "Return status") {
+            HStack(spacing: 24) {
+                RefundChoice(
+                    title: "Already sent",
+                    isSelected: viewModel.hasShipped
+                ) {
+                    viewModel.hasShipped = true
                 }
-                .padding(.horizontal, 14)
-                .frame(minHeight: 58)
-                .background(
-                    fieldBackground,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
-            }
-            .id(Field.amount)
 
-            VStack(alignment: .leading, spacing: 8) {
-                fieldLabel(
-                    viewModel.trackedDateTitle,
-                    symbol: viewModel.trackedDateSymbol
-                )
-                DatePicker(
-                    viewModel.trackedDateTitle,
-                    selection: Binding(
-                        get: { viewModel.returnDate },
-                        set: viewModel.setTrackedDate
-                    ),
-                    in: ...viewModel.shippedDateUpperBound,
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                .padding(.horizontal, 14)
-                .frame(minHeight: 52)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    fieldBackground,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
-                .accessibilityIdentifier("returnDatePicker")
+                RefundChoice(
+                    title: "Still to send",
+                    isSelected: !viewModel.hasShipped
+                ) {
+                    viewModel.hasShipped = false
+                }
+
+                Spacer(minLength: 0)
             }
+            .padding(.vertical, 4)
+            .accessibilityIdentifier("shipmentStatePicker")
         }
-        .refundGlassCard(
-            tint: RefundTheme.color(for: viewModel.retailerName),
-            padding: 18
-        )
     }
 
-    private var validationCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var merchantField: some View {
+        RefundFormField(label: "Merchant") {
+            TextField("Where it came from", text: $viewModel.retailerName)
+                .textContentType(.organizationName)
+                .textInputAutocapitalization(.words)
+                .submitLabel(.next)
+                .focused($focusedField, equals: .merchant)
+                .onSubmit { focusedField = .item }
+                .font(.system(.body))
+                .accessibilityIdentifier("retailerField")
+        }
+        .id(Field.merchant)
+    }
+
+    private var itemField: some View {
+        RefundFormField(label: "Item") {
+            HStack(spacing: 12) {
+                coverEmojiButton
+
+                TextField(
+                    "Optional — what you returned",
+                    text: $viewModel.itemName
+                )
+                .textInputAutocapitalization(.sentences)
+                .submitLabel(.next)
+                .focused($focusedField, equals: .item)
+                .onSubmit { focusedField = .amount }
+                .font(.system(.body))
+                .accessibilityIdentifier("itemField")
+                .accessibilityLabel("Item name, optional")
+            }
+        }
+        .id(Field.item)
+    }
+
+    private var amountField: some View {
+        RefundFormField(label: "Amount") {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                // Per-refund only: picking here never rewrites the default in
+                // Settings.
+                Button {
+                    focusedField = nil
+                    isChoosingCurrency = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(viewModel.currencyCode)
+                            .eyebrow(size: 12, color: RefundTheme.inkSoft)
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(RefundTheme.inkFaint)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Currency \(viewModel.currencyCode)")
+                .accessibilityHint("Sets the currency for this refund only")
+                .accessibilityIdentifier("currencyChip")
+
+                TextField("0.00", text: $viewModel.amountText)
+                    .keyboardType(.decimalPad)
+                    .serif(30, relativeTo: .largeTitle)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .contentShape(Rectangle())
+                    .focused($focusedField, equals: .amount)
+                    .accessibilityLabel("Refund amount")
+                    .accessibilityIdentifier("amountField")
+            }
+            .padding(.bottom, 2)
+        }
+        .id(Field.amount)
+    }
+
+    private var trackedDateField: some View {
+        RefundFormField(label: viewModel.trackedDateTitle) {
+            DatePicker(
+                viewModel.trackedDateTitle,
+                selection: Binding(
+                    get: { viewModel.returnDate },
+                    set: viewModel.setTrackedDate
+                ),
+                in: viewModel.trackedDateRange,
+                displayedComponents: .date
+            )
+            .datePickerStyle(.compact)
+            .labelsHidden()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 2)
+            .accessibilityIdentifier("returnDatePicker")
+        }
+    }
+
+    private var validationNotice: some View {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(viewModel.validationMessages, id: \.self) { message in
-                Label(message, systemImage: "exclamationmark.circle.fill")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(RefundTheme.coral)
+                Text(message)
+                    .font(.system(.footnote))
+                    .foregroundStyle(RefundTheme.alert)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .refundGlassCard(tint: RefundTheme.coral, padding: 16)
+        .padding(.top, 26)
         .accessibilityElement(children: .combine)
     }
 
     private var saveButton: some View {
-        Button {
+        Button(refund == nil ? "Track refund" : "Save changes") {
             save()
-        } label: {
-            Label(
-                refund == nil ? "Track refund" : "Save changes",
-                systemImage: "checkmark.circle.fill"
-            )
         }
         .buttonStyle(RefundPrimaryButtonStyle())
+        .padding(.top, 34)
         .accessibilityIdentifier("saveRefundButton")
     }
 
-    private var fieldBackground: some ShapeStyle {
-        Color(uiColor: .secondarySystemGroupedBackground).opacity(0.82)
-    }
-
-    private func fieldLabel(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.secondary)
+    private var currencyBinding: Binding<String> {
+        Binding(
+            get: { viewModel.currencyCode },
+            set: { viewModel.setCurrencyCode($0) }
+        )
     }
 
     private var saveErrorBinding: Binding<Bool> {
@@ -245,6 +318,7 @@ struct RefundFormView: View {
 
     private var hasUnsavedContent: Bool {
         !viewModel.retailerName.isEmpty
+            || !viewModel.itemName.isEmpty
             || !viewModel.amountText.isEmpty
             || refund != nil
     }

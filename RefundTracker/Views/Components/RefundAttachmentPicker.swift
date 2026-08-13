@@ -20,20 +20,25 @@ struct RefundAttachmentPicker: View {
     var body: some View {
         HStack(spacing: 12) {
             PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                Label("Photo", systemImage: "photo")
+                Text("Add photo")
+                    .eyebrow(size: 11, color: RefundTheme.ink)
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .overlay {
+                        Rectangle()
+                            .stroke(
+                                RefundTheme.ink.opacity(0.5),
+                                lineWidth: RefundTheme.hairline
+                            )
+                    }
             }
-            .buttonStyle(.bordered)
             .disabled(isLoading)
             .accessibilityIdentifier("addPhotoAttachmentButton")
 
-            Button {
+            Button("Add file") {
                 isImportingFile = true
-            } label: {
-                Label("File", systemImage: "doc")
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(RefundSecondaryButtonStyle())
             .disabled(isLoading)
             .accessibilityIdentifier("addFileAttachmentButton")
         }
@@ -41,7 +46,7 @@ struct RefundAttachmentPicker: View {
             if isLoading {
                 ProgressView()
                     .padding(8)
-                    .background(.regularMaterial, in: Circle())
+                    .background(RefundTheme.surface, in: Circle())
                     .accessibilityLabel("Adding attachment")
             }
         }

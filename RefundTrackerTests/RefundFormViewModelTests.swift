@@ -57,6 +57,34 @@ final class RefundFormViewModelTests: XCTestCase {
         XCTAssertEqual(refund.expectedRefundDate, expectedDate)
     }
 
+    /// The currency chosen on the form belongs to that refund alone, and a
+    /// later read of the app-wide default must not overwrite it.
+    @MainActor
+    func testPerRefundCurrencyOverridesTheDefaultAndSurvivesSettings() {
+        let viewModel = RefundFormViewModel(
+            defaultCurrencyCode: "USD",
+            calendar: calendar,
+            now: DomainTestSupport.date(2026, 8, 6)
+        )
+
+        viewModel.setCurrencyCode("jpy")
+        XCTAssertEqual(viewModel.currencyCode, "JPY")
+
+        viewModel.applySettings(
+            expectedBusinessDays: 10,
+            defaultCurrencyCode: "USD"
+        )
+        XCTAssertEqual(viewModel.currencyCode, "JPY")
+
+        viewModel.retailerName = "Muji"
+        viewModel.amountText = "4200"
+
+        let refund = Refund()
+        viewModel.apply(to: refund)
+
+        XCTAssertEqual(refund.currencyCode, "JPY")
+    }
+
     @MainActor
     func testEditingPreservesHiddenLegacyFieldsAndSavedCurrency() {
         let purchaseDate = DomainTestSupport.date(2026, 7, 20)
@@ -119,6 +147,95 @@ final class RefundFormViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testItemNameIsCapturedAndTrimmedOnCreate() {
+        let viewModel = RefundFormViewModel(
+            defaultCurrencyCode: "USD",
+            calendar: calendar,
+            now: DomainTestSupport.date(2026, 8, 7)
+        )
+        viewModel.retailerName = "Everlane"
+        viewModel.itemName = "  ReNew Transit Backpack  "
+        viewModel.amountText = "95.00"
+
+        // Item name stays optional, so it must not block saving.
+        XCTAssertTrue(viewModel.isValid)
+
+        let refund = Refund()
+        viewModel.apply(to: refund)
+
+        XCTAssertEqual(refund.retailerName, "Everlane")
+        XCTAssertEqual(refund.itemName, "ReNew Transit Backpack")
+        XCTAssertEqual(refund.userFacingItemName, "ReNew Transit Backpack")
+    }
+
+    @MainActor
+    func testBlankItemNameFallsBackToThePlaceholder() {
+        let viewModel = RefundFormViewModel(
+            defaultCurrencyCode: "USD",
+            calendar: calendar,
+            now: DomainTestSupport.date(2026, 8, 7)
+        )
+        viewModel.retailerName = "Everlane"
+        viewModel.itemName = "   "
+        viewModel.amountText = "95.00"
+
+        let refund = Refund()
+        viewModel.apply(to: refund)
+
+        XCTAssertEqual(refund.itemName, Refund.simplifiedItemPlaceholder)
+        XCTAssertNil(refund.userFacingItemName)
+    }
+
+    @MainActor
+    func testEditingSeedsTheSavedItemNameAndCanClearIt() {
+        let refund = Refund(
+            retailerName: "Nordstrom",
+            itemName: "Leather ankle boots",
+            refundAmount: 189.95,
+            currencyCode: "USD",
+            returnDate: DomainTestSupport.date(2026, 8, 1),
+            expectedRefundDate: DomainTestSupport.date(2026, 8, 18),
+            status: .shipped
+        )
+        let viewModel = RefundFormViewModel(
+            refund: refund,
+            calendar: calendar,
+            now: DomainTestSupport.date(2026, 8, 6)
+        )
+
+        XCTAssertEqual(viewModel.itemName, "Leather ankle boots")
+
+        viewModel.itemName = "Suede ankle boots"
+        viewModel.apply(to: refund)
+        XCTAssertEqual(refund.itemName, "Suede ankle boots")
+
+        viewModel.itemName = ""
+        viewModel.apply(to: refund)
+        XCTAssertEqual(refund.itemName, Refund.simplifiedItemPlaceholder)
+    }
+
+    @MainActor
+    func testEditingARecordSavedWithoutAnItemShowsAnEmptyField() {
+        let refund = Refund(
+            retailerName: "Everlane",
+            itemName: Refund.simplifiedItemPlaceholder,
+            refundAmount: 95,
+            currencyCode: "USD",
+            returnDate: DomainTestSupport.date(2026, 8, 1),
+            expectedRefundDate: DomainTestSupport.date(2026, 8, 18),
+            status: .shipped
+        )
+        let viewModel = RefundFormViewModel(
+            refund: refund,
+            calendar: calendar,
+            now: DomainTestSupport.date(2026, 8, 6)
+        )
+
+        // The placeholder is storage, not something the user typed.
+        XCTAssertEqual(viewModel.itemName, "")
+    }
+
+    @MainActor
     func testEditingUnshippedLegacyReturnDoesNotInventShipment() {
         let originalReturnDate = DomainTestSupport.date(2026, 8, 1)
         let updatedReturnDate = DomainTestSupport.date(2026, 8, 3)
@@ -137,7 +254,7 @@ final class RefundFormViewModelTests: XCTestCase {
             now: DomainTestSupport.date(2026, 8, 6)
         )
 
-        XCTAssertFalse(viewModel.tracksShipmentDate)
+        XCTAssertEqual(viewModel.trackedDateKind, .returnStarted)
         XCTAssertEqual(viewModel.trackedDateTitle, "Return date")
 
         viewModel.setTrackedDate(updatedReturnDate)

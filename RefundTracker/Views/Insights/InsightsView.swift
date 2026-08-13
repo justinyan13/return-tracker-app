@@ -1,126 +1,147 @@
 import Charts
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct InsightsView: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var refunds: [Refund]
 
     @State private var viewModel = InsightsViewModel()
+    @State private var selectedMode: InsightsMode = .completed
 
     var body: some View {
         NavigationStack {
             ZStack {
                 RefundBackdrop()
 
-                if refunds.isEmpty {
-                    insightsEmptyState
-                } else {
-                    insights
+                // The picker scrolls with the content rather than sitting above
+                // it, so a drag moves the whole screen together instead of
+                // peeling the cards away from a pinned header.
+                ScrollView {
+                    VStack(spacing: 0) {
+                        InsightsModePicker(selection: $selectedMode)
+
+                        switch selectedMode {
+                        case .completed:
+                            completedInsights
+                        case .outstanding:
+                            outstandingInsights
+                        }
+                    }
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                .accessibilityIdentifier(selectedMode.contentAccessibilityIdentifier)
             }
-            .navigationTitle("Money story")
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .navigationTitle("Insights")
             .onAppear {
+                viewModel.refresh()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard newPhase == .active else { return }
+                viewModel.refresh()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIApplication.significantTimeChangeNotification
+                )
+            ) { _ in
+                viewModel.refresh()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
+            ) { _ in
+                viewModel.refresh()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: .NSSystemTimeZoneDidChange
+                )
+            ) { _ in
+                viewModel.refresh()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: NSLocale.currentLocaleDidChangeNotification
+                )
+            ) { _ in
                 viewModel.refresh()
             }
         }
     }
 
-    private var insights: some View {
-        let currencyCode = settings.defaultCurrencyCode
+    @ViewBuilder
+    private var completedInsights: some View {
+        let currencyCode = viewModel.completedCurrencyCode(
+            for: refunds,
+            preferred: settings.defaultCurrencyCode
+        )
         let snapshot = viewModel.metrics(
             for: refunds,
             currencyCode: currencyCode
         )
 
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22) {
-                MoneyBackHero(
+        if snapshot.completedRefundCount == 0 {
+            InsightsModeEmptyState(mode: .completed)
+        } else {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                CompletedHeader(
                     amount: snapshot.totalRefundsReceived,
-                    pendingAmount: snapshot.totalRefundsPending,
-                    currencyCode: currencyCode
+                    currencyCode: currencyCode,
+                    completedCount: snapshot.completedRefundCount,
+                    averageDays: averageDaysLabel(snapshot.averageRefundDays),
+                    merchantCount: snapshot.completedRetailerCount
                 )
-
-                ScrollView(.horizontal) {
-                    HStack(spacing: 12) {
-                        InsightBubble(
-                            title: "Average wait",
-                            value: averageDaysLabel(snapshot.averageRefundDays),
-                            symbol: "calendar.badge.clock",
-                            tint: RefundTheme.blue
-                        )
-                        InsightBubble(
-                            title: "Overdue",
-                            value: "\(snapshot.overdueRefundCount)",
-                            symbol: "exclamationmark.bubble.fill",
-                            tint: snapshot.overdueRefundCount == 0
-                                ? RefundTheme.mint
-                                : RefundTheme.coral
-                        )
-                        InsightBubble(
-                            title: "Still coming",
-                            value: snapshot.totalRefundsPending.formatted(
-                                .currency(code: currencyCode)
-                            ),
-                            symbol: "arrow.down.to.line.compact",
-                            tint: RefundTheme.mango
-                        )
-                    }
-                    .padding(.horizontal, 1)
-                }
-                .scrollIndicators(.hidden)
 
                 MonthlyRefundChart(
                     totals: snapshot.monthlyRefundTotals,
                     currencyCode: currencyCode
                 )
+                .padding(.top, 44)
 
                 RetailerTimingSection(
                     retailers: Array(snapshot.retailerPerformance.prefix(5))
                 )
+                .padding(.top, 44)
 
-                Text("Showing \(currencyCode) only · currencies are never converted")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, 8)
+                Text("\(currencyCode) only · currencies are never converted")
+                    .eyebrow(size: 9)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 40)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 28)
-        }
-        .refreshable {
-            viewModel.refresh()
+            .padding(.horizontal, 22)
+            .padding(.bottom, 40)
         }
     }
 
-    private var insightsEmptyState: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "chart.xyaxis.line")
-                .font(.system(size: 50, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 112, height: 112)
-                .background(
-                    LinearGradient(
-                        colors: [RefundTheme.violet, RefundTheme.pink],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 32, style: .continuous)
-                )
-                .shadow(color: RefundTheme.violet.opacity(0.28), radius: 22, y: 13)
+    @ViewBuilder
+    private var outstandingInsights: some View {
+        if refunds.isEmpty {
+            InsightsModeEmptyState(mode: .outstanding)
+        } else {
+            let metrics = viewModel.outstandingMetrics(for: refunds)
+            let preferredCurrency = settings.defaultCurrencyCode.uppercased()
+            let primaryCurrency = metrics.awaitingAmountsByCurrency[preferredCurrency] != nil
+                ? preferredCurrency
+                : metrics.awaitingAmountsByCurrency.keys.sorted().first
+                    ?? preferredCurrency
 
-            Text("Your money story starts here")
-                .font(.title2.bold())
-
-            Text("A few tracked refunds are all it takes to reveal timing and totals.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            RefundSummaryHeader(
+                amount: metrics.awaitingAmountsByCurrency[primaryCurrency] ?? 0,
+                currencyCode: primaryCurrency,
+                otherAmounts: metrics.awaitingAmountsByCurrency.filter {
+                    $0.key.caseInsensitiveCompare(
+                        primaryCurrency
+                    ) != .orderedSame
+                },
+                openCount: metrics.openReturnCount,
+                overdueCount: metrics.overdueRefundCount,
+                refundedCount: metrics.refundedCount
+            )
+            .padding(.horizontal, 22)
+            .padding(.bottom, 40)
         }
-        .padding(28)
-        .refundGlassCard(tint: RefundTheme.pink, padding: 22)
-        .padding(20)
     }
 
     private func averageDaysLabel(_ days: Double?) -> String {
@@ -129,103 +150,221 @@ struct InsightsView: View {
     }
 }
 
-private struct MoneyBackHero: View {
-    let amount: Decimal
-    let pendingAmount: Decimal
-    let currencyCode: String
+private enum InsightsMode: String, CaseIterable, Identifiable {
+    case completed
+    case outstanding
 
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [RefundTheme.violet, RefundTheme.pink],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+    var id: String { rawValue }
 
-            Circle()
-                .fill(.white.opacity(0.12))
-                .frame(width: 180, height: 180)
-                .offset(x: 55, y: -72)
-
-            Image(systemName: "party.popper.fill")
-                .font(.system(size: 42))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.white.opacity(0.9))
-                .padding(24)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("BACK IN YOUR POCKET")
-                    .font(.caption.bold())
-                    .tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.76))
-
-                Text(amount, format: .currency(code: currencyCode))
-                    .font(.system(.largeTitle, design: .rounded, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.55)
-                    .lineLimit(1)
-
-                Label(
-                    "\(pendingAmount.formatted(.currency(code: currencyCode))) still on the way",
-                    systemImage: "clock.arrow.circlepath"
-                )
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.88))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.white.opacity(0.14), in: Capsule())
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
-            .padding(.top, 28)
+    var displayName: String {
+        switch self {
+        case .completed:
+            "Completed"
+        case .outstanding:
+            "Outstanding"
         }
-        .frame(minHeight: 210)
-        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .stroke(.white.opacity(0.32), lineWidth: 1)
+    }
+
+    /// Both modes share one scroll view now, so it carries whichever mode is
+    /// on screen.
+    var contentAccessibilityIdentifier: String {
+        switch self {
+        case .completed:
+            "insights.completedContent"
+        case .outstanding:
+            "insights.outstandingContent"
         }
-        .shadow(color: RefundTheme.violet.opacity(0.28), radius: 26, y: 16)
-        .accessibilityElement(children: .combine)
     }
 }
 
-private struct InsightBubble: View {
-    let title: String
-    let value: String
-    let symbol: String
-    let tint: Color
+private struct InsightsModePicker: View {
+    @Binding var selection: InsightsMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.title3.bold())
-                .foregroundStyle(tint)
-                .frame(width: 42, height: 42)
-                .background(tint.opacity(0.13), in: Circle())
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(InsightsMode.allCases) { mode in
+                    let isSelected = selection == mode
 
-            Text(value)
-                .font(.title3.bold())
-                .monospacedDigit()
-                .minimumScaleFactor(0.65)
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            selection = mode
+                        }
+                    } label: {
+                        Text(mode.displayName)
+                            .eyebrow(
+                                size: 11,
+                                color: isSelected
+                                    ? RefundTheme.ink
+                                    : RefundTheme.inkFaint
+                            )
+                            .padding(.bottom, 8)
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .fill(
+                                        isSelected
+                                            ? RefundTheme.ink
+                                            : .clear
+                                    )
+                                    .frame(height: 1.5)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(mode.displayName)
+                    .accessibilityValue(
+                        isSelected ? "Selected" : "Not selected"
+                    )
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    .accessibilityIdentifier("insights.mode.\(mode.rawValue)")
+                }
+            }
+            .padding(.horizontal, 22)
+
+            Hairline()
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("insights.modePicker")
+    }
+}
+
+private struct CompletedHeader: View {
+    let amount: Decimal
+    let currencyCode: String
+    let completedCount: Int
+    let averageDays: String
+    let merchantCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Back in your pocket")
+                .eyebrow()
+
+            Text(amount, format: .currency(code: currencyCode))
+                .serif(46, relativeTo: .largeTitle)
+                .foregroundStyle(RefundTheme.ink)
                 .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .padding(.top, 10)
+
+            Text(completedSummary)
+                .font(.system(.subheadline))
+                .foregroundStyle(RefundTheme.inkSoft)
+                .padding(.top, 6)
+
+            Hairline()
+                .padding(.top, 24)
+
+            HStack(alignment: .top, spacing: 0) {
+                InsightFigure(
+                    value: completedCount.formatted(),
+                    label: "Completed"
+                )
+
+                VerticalHairline(height: 40)
+
+                InsightFigure(value: averageDays, label: "Avg wait")
+
+                VerticalHairline(height: 40)
+
+                InsightFigure(
+                    value: merchantCount.formatted(),
+                    label: merchantCount == 1 ? "Merchant" : "Merchants"
+                )
+            }
+            .padding(.vertical, 18)
+
+            Hairline()
+        }
+        .padding(.top, 22)
+        .accessibilityIdentifier("insights.completedSummary")
+    }
+
+    private var completedSummary: String {
+        completedCount == 1
+            ? "One refund completed."
+            : "\(completedCount) refunds completed."
+    }
+}
+
+private struct InsightFigure: View {
+    let value: String
+    let label: String
+    var tint: Color = RefundTheme.ink
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Text(value)
+                .serif(22, relativeTo: .title2)
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+
+            Text(label)
+                .eyebrow(size: 9)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(value)")
+    }
+}
+
+private struct InsightsModeEmptyState: View {
+    let mode: InsightsMode
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(eyebrow)
+                .eyebrow()
 
             Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .serif(30, relativeTo: .largeTitle)
+                .foregroundStyle(RefundTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 14)
+
+            Hairline()
+                .padding(.top, 24)
+
+            Text(message)
+                .font(.system(.subheadline))
+                .foregroundStyle(RefundTheme.inkSoft)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 18)
         }
-        .frame(
-            minWidth: 132,
-            maxWidth: 132,
-            minHeight: 126,
-            alignment: .leading
-        )
-        .refundGlassCard(tint: tint, padding: 16)
-        .accessibilityElement(children: .combine)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 22)
+        .padding(.top, 40)
+    }
+
+    private var eyebrow: String {
+        switch mode {
+        case .completed:
+            "Nothing completed yet"
+        case .outstanding:
+            "Nothing outstanding"
+        }
+    }
+
+    private var title: String {
+        switch mode {
+        case .completed:
+            "Completed patterns will show up here."
+        case .outstanding:
+            "No returns in flight."
+        }
+    }
+
+    private var message: String {
+        switch mode {
+        case .completed:
+            "Once a refund lands, Insights will track the amount, timing, and merchant history."
+        case .outstanding:
+            "New returns will appear here with the amount still due and anything running late."
+        }
     }
 }
 
@@ -234,12 +373,8 @@ private struct MonthlyRefundChart: View {
     let currencyCode: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            RefundSectionHeading(
-                title: "The comeback",
-                subtitle: "Refunds received over six months",
-                symbol: "waveform.path.ecg"
-            )
+        VStack(alignment: .leading, spacing: 22) {
+            RefundSectionHeading(title: "By month", trailing: "Last six")
 
             Chart(totals) { total in
                 BarMark(
@@ -247,16 +382,10 @@ private struct MonthlyRefundChart: View {
                     y: .value(
                         "Refund total",
                         NSDecimalNumber(decimal: total.amount).doubleValue
-                    )
+                    ),
+                    width: .fixed(22)
                 )
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [RefundTheme.violet, RefundTheme.pink],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .cornerRadius(7)
+                .foregroundStyle(RefundTheme.ink)
                 .accessibilityLabel(total.month.formatted(.dateTime.month(.wide)))
                 .accessibilityValue(
                     total.amount.formatted(.currency(code: currencyCode))
@@ -265,13 +394,17 @@ private struct MonthlyRefundChart: View {
             .chartXAxis {
                 AxisMarks(values: .stride(by: .month)) {
                     AxisValueLabel(format: .dateTime.month(.narrow))
+                        .font(.system(.caption2).weight(.semibold))
+                        .foregroundStyle(RefundTheme.inkFaint)
                     AxisGridLine().foregroundStyle(.clear)
+                    AxisTick().foregroundStyle(.clear)
                 }
             }
             .chartYAxis {
                 AxisMarks(position: .leading) { value in
                     AxisGridLine()
-                        .foregroundStyle(.secondary.opacity(0.16))
+                        .foregroundStyle(RefundTheme.line)
+                    AxisTick().foregroundStyle(.clear)
                     AxisValueLabel {
                         if let amount = value.as(Double.self) {
                             Text(
@@ -279,14 +412,15 @@ private struct MonthlyRefundChart: View {
                                 format: .currency(code: currencyCode)
                                     .precision(.fractionLength(0))
                             )
+                            .font(.system(.caption2))
+                            .foregroundStyle(RefundTheme.inkFaint)
                         }
                     }
                 }
             }
-            .frame(height: 210)
+            .frame(height: 200)
             .accessibilityLabel("Monthly refund totals chart")
         }
-        .refundGlassCard(tint: RefundTheme.violet)
     }
 }
 
@@ -294,55 +428,42 @@ private struct RetailerTimingSection: View {
     let retailers: [RetailerRefundPerformance]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            RefundSectionHeading(
-                title: "Who takes their time?",
-                subtitle: "Average days until money comes back",
-                symbol: "hourglass"
-            )
+        VStack(alignment: .leading, spacing: 0) {
+            RefundSectionHeading(title: "Merchants", trailing: "Avg days")
 
             if retailers.isEmpty {
-                Label(
-                    "Complete a refund to compare merchants",
-                    systemImage: "sparkles"
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .refundGlassCard(tint: RefundTheme.mango)
+                Text("Complete a refund with a received date to compare merchants.")
+                    .font(.system(.footnote))
+                    .foregroundStyle(RefundTheme.inkSoft)
+                    .padding(.vertical, 22)
             } else {
-                VStack(spacing: 12) {
-                    ForEach(retailers) { retailer in
-                        HStack(spacing: 12) {
-                            MerchantMark(name: retailer.retailerName, size: 44)
+                ForEach(retailers) { retailer in
+                    HStack(spacing: 14) {
+                        MerchantMark(name: retailer.retailerName, size: 38)
 
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(retailer.retailerName)
-                                    .font(.headline)
-                                    .lineLimit(1)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(retailer.retailerName)
+                                .font(.system(.subheadline).weight(.medium))
+                                .foregroundStyle(RefundTheme.ink)
+                                .lineLimit(1)
 
-                                Text(
-                                    "\(retailer.completedRefundCount) completed"
-                                )
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            Text(
-                                "\(retailer.averageDays.formatted(.number.precision(.fractionLength(1))))d"
-                            )
-                            .font(.title3.bold())
-                            .monospacedDigit()
-                            .foregroundStyle(RefundTheme.color(for: retailer.retailerName))
+                            Text("\(retailer.completedRefundCount) completed")
+                                .font(.system(.caption))
+                                .foregroundStyle(RefundTheme.inkSoft)
                         }
-                        .refundGlassCard(
-                            tint: RefundTheme.color(for: retailer.retailerName),
-                            padding: 14
+
+                        Spacer(minLength: 8)
+
+                        Text(
+                            "\(retailer.averageDays.formatted(.number.precision(.fractionLength(1))))d"
                         )
-                        .accessibilityElement(children: .combine)
+                        .serif(19, relativeTo: .title3)
+                        .foregroundStyle(RefundTheme.ink)
                     }
+                    .padding(.vertical, 14)
+                    .accessibilityElement(children: .combine)
+
+                    Hairline()
                 }
             }
         }

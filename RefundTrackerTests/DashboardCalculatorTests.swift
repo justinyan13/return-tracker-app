@@ -59,6 +59,7 @@ final class DashboardCalculatorTests: XCTestCase {
         XCTAssertEqual(metrics.awaitingAmountsByCurrency["EUR"], 70)
         XCTAssertEqual(metrics.openReturnCount, 4)
         XCTAssertEqual(metrics.overdueRefundCount, 1)
+        XCTAssertEqual(metrics.refundedCount, 1)
         XCTAssertEqual(metrics.completedThisMonthCount, 1)
         XCTAssertEqual(metrics.completedThisMonthAmount, 25)
         XCTAssertEqual(metrics.attentionRefunds.map(\.retailerName), ["Overdue", "Disputed"])
@@ -78,6 +79,7 @@ final class DashboardCalculatorTests: XCTestCase {
 
         XCTAssertEqual(metrics.totalAwaitingRefund, 0)
         XCTAssertEqual(metrics.openReturnCount, 0)
+        XCTAssertEqual(metrics.refundedCount, 0)
         XCTAssertTrue(metrics.attentionRefunds.isEmpty)
         XCTAssertTrue(metrics.upcomingRefunds.isEmpty)
     }

@@ -29,7 +29,7 @@ Capturing a refund is intentionally lightweight. The add screen presents four es
 
 The currency is already selected, and the expected refund date is calculated from the configured business-day window. The user can start tracking without entering an item name, order number, carrier, tracking number, notes, or other purchase details.
 
-The interface uses a colorful gradient canvas, translucent glass cards, and merchant monograms generated from the retailer name. The dashboard’s “Money Coming Back” hero keeps the outstanding balance and open, overdue, and recently refunded signals together. Merchant-first return cards then form one easy-to-scan stream, with status and shipped or expected dates visible without exposing secondary detail.
+The interface is editorial rather than decorative: warm paper, near-black ink, hairline rules, and a serif reserved for figures and display titles. The content layer avoids gradients, glass, and shadows, while native iOS Liquid Glass keeps navigation distinct above it. Colour appears only where something is late or has landed. The Overview screen leads with the outstanding balance and the open, overdue, and refunded counts on a ruled strip. Returns then read as one ruled list — merchant, item, what happens next, and the amount — with status shown as a dot and a letterspaced word.
 
 ## Architecture
 
@@ -77,8 +77,8 @@ The default expected date is calculated by advancing the configured number of Mo
 
 ## Features
 
-- Playful “Money Coming Back” dashboard with compact financial signals
-- Merchant-first glass-card streams with clear status and date cues
+- Editorial Overview screen leading with the outstanding balance and compact counts
+- Merchant-first ruled lists with clear status and date cues
 - Four-essential capture flow with validation and automatic expected dates
 - Search, practical filters, and sorting
 - Focused status actions for shipped, delivered, refunded, disputed, and cancelled returns
