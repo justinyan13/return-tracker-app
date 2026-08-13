@@ -12,6 +12,7 @@ struct RefundFormView: View {
     @State private var didAttemptSave = false
     @State private var didApplySettings = false
     @State private var isChoosingCoverEmoji = false
+    @State private var isChoosingCurrency = false
     @State private var saveErrorMessage: String?
     @FocusState private var focusedField: Field?
 
@@ -35,7 +36,6 @@ struct RefundFormView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
                             header
-                            coverEmojiField
 
                             // Asked first: the answer decides whether the date
                             // below is a record of what happened or a deadline
@@ -102,6 +102,23 @@ struct RefundFormView: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(6)
             }
+            .sheet(isPresented: $isChoosingCurrency) {
+                NavigationStack {
+                    CurrencyPickerView(
+                        selection: currencyBinding,
+                        title: "Currency"
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") {
+                                isChoosingCurrency = false
+                            }
+                        }
+                    }
+                }
+                .tint(RefundTheme.ink)
+                .presentationCornerRadius(6)
+            }
             .onAppear {
                 applySettingsIfNeeded()
             }
@@ -127,39 +144,21 @@ struct RefundFormView: View {
         .padding(.bottom, 30)
     }
 
-    private var coverEmojiField: some View {
-        RefundFormField(label: "Cover") {
-            Button {
-                focusedField = nil
-                isChoosingCoverEmoji = true
-            } label: {
-                HStack(spacing: 14) {
-                    RefundCoverMark(emoji: viewModel.coverEmoji, size: 48)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Choose an emoji")
-                            .font(.system(.body).weight(.medium))
-
-                        Text("Make this return easy to spot")
-                            .font(.system(.footnote))
-                            .foregroundStyle(RefundTheme.inkSoft)
-                    }
-
-                    Spacer(minLength: 8)
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(.footnote).weight(.semibold))
-                        .foregroundStyle(RefundTheme.inkFaint)
-                        .accessibilityHidden(true)
-                }
+    /// The cover lives beside the item it covers rather than in a row of its
+    /// own: the tile alone is the control, no label needed.
+    private var coverEmojiButton: some View {
+        Button {
+            focusedField = nil
+            isChoosingCoverEmoji = true
+        } label: {
+            RefundCoverMark(emoji: viewModel.coverEmoji, size: 40)
                 .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Return cover emoji")
-            .accessibilityValue(viewModel.coverEmoji)
-            .accessibilityHint("Opens the emoji picker")
-            .accessibilityIdentifier("coverEmojiPickerButton")
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Return cover emoji")
+        .accessibilityValue(viewModel.coverEmoji)
+        .accessibilityHint("Opens the emoji picker")
+        .accessibilityIdentifier("coverEmojiPickerButton")
     }
 
     private var shipmentStateField: some View {
@@ -202,7 +201,13 @@ struct RefundFormView: View {
 
     private var itemField: some View {
         RefundFormField(label: "Item") {
-            TextField("Optional — what you returned", text: $viewModel.itemName)
+            HStack(spacing: 12) {
+                coverEmojiButton
+
+                TextField(
+                    "Optional — what you returned",
+                    text: $viewModel.itemName
+                )
                 .textInputAutocapitalization(.sentences)
                 .submitLabel(.next)
                 .focused($focusedField, equals: .item)
@@ -210,6 +215,7 @@ struct RefundFormView: View {
                 .font(.system(.body))
                 .accessibilityIdentifier("itemField")
                 .accessibilityLabel("Item name, optional")
+            }
         }
         .id(Field.item)
     }
@@ -217,11 +223,27 @@ struct RefundFormView: View {
     private var amountField: some View {
         RefundFormField(label: "Amount") {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(viewModel.currencyCode)
-                    .eyebrow(size: 12, color: RefundTheme.inkSoft)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Currency \(viewModel.currencyCode)")
-                    .accessibilityIdentifier("currencyChip")
+                // Per-refund only: picking here never rewrites the default in
+                // Settings.
+                Button {
+                    focusedField = nil
+                    isChoosingCurrency = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(viewModel.currencyCode)
+                            .eyebrow(size: 12, color: RefundTheme.inkSoft)
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(RefundTheme.inkFaint)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Currency \(viewModel.currencyCode)")
+                .accessibilityHint("Sets the currency for this refund only")
+                .accessibilityIdentifier("currencyChip")
 
                 TextField("0.00", text: $viewModel.amountText)
                     .keyboardType(.decimalPad)
@@ -278,6 +300,13 @@ struct RefundFormView: View {
         .buttonStyle(RefundPrimaryButtonStyle())
         .padding(.top, 34)
         .accessibilityIdentifier("saveRefundButton")
+    }
+
+    private var currencyBinding: Binding<String> {
+        Binding(
+            get: { viewModel.currencyCode },
+            set: { viewModel.setCurrencyCode($0) }
+        )
     }
 
     private var saveErrorBinding: Binding<Bool> {

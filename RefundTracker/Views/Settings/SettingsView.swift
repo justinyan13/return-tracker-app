@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var refunds: [Refund]
 
@@ -45,6 +46,14 @@ struct SettingsView: View {
                 .tint(RefundTheme.ink)
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("settings.done")
+                }
+            }
             // Owned by the stack rather than by a row inside the scroll view.
             // As a `NavigationLink` destination, picking a currency rewrote
             // the row that owned the link, detaching the screen already on

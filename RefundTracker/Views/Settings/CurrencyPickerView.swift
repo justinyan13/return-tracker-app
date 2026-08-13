@@ -3,6 +3,9 @@ import SwiftUI
 struct CurrencyPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var selection: String
+    /// The picker is reused for the app-wide default and for a single
+    /// refund's currency, so the screen names which one is being set.
+    var title = "Default currency"
 
     @State private var searchText = ""
 
@@ -79,7 +82,7 @@ struct CurrencyPickerView: View {
         .scrollContentBackground(.hidden)
         .background(RefundBackdrop())
         .tint(RefundTheme.ink)
-        .navigationTitle("Default currency")
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Currency or code")
         .overlay {

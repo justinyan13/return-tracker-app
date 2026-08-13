@@ -19,17 +19,21 @@ final class RefundTrackerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Everlane"].waitForExistence(timeout: 3))
     }
 
-    func testCombinedRefundsScreenAndThreeIconTabs() {
+    func testCombinedRefundsScreenAndTwoIconTabs() {
         launchApp(seedSampleData: true)
 
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.waitForExistence(timeout: 3))
 
         let tabs = tabBar.buttons.allElementsBoundByIndex
-        XCTAssertEqual(tabs.map(\.label), ["Refunds", "Insights", "Settings"])
+        XCTAssertEqual(tabs.map(\.label), ["Refunds", "Insights"])
         XCTAssertTrue(tabBar.buttons["Refunds"].isSelected)
         XCTAssertFalse(tabBar.buttons["Overview"].exists)
         XCTAssertFalse(tabBar.buttons["Add"].exists)
+        XCTAssertFalse(tabBar.buttons["Settings"].exists)
+
+        // Settings now lives beside the add button in the navigation bar.
+        XCTAssertTrue(app.buttons["refunds.openSettings"].exists)
 
         XCTAssertTrue(
             app.descendants(matching: .any)["refundList"]
@@ -147,7 +151,7 @@ final class RefundTrackerUITests: XCTestCase {
     func testSelectingADefaultCurrency() {
         launchApp()
 
-        app.tabBars.buttons["Settings"].tap()
+        openSettings()
 
         let currencyRow = app.buttons["settings.defaultCurrency"]
         XCTAssertTrue(currencyRow.waitForExistence(timeout: 3))
@@ -188,7 +192,7 @@ final class RefundTrackerUITests: XCTestCase {
     func testChangingTheExpectedRefundWindow() {
         launchApp()
 
-        app.tabBars.buttons["Settings"].tap()
+        openSettings()
 
         let stepper = app.steppers.firstMatch
         XCTAssertTrue(stepper.waitForExistence(timeout: 3))
@@ -316,6 +320,13 @@ final class RefundTrackerUITests: XCTestCase {
             app.launchArguments.append("--ui-testing-seed")
         }
         app.launch()
+    }
+
+    /// Settings is a sheet opened from the Refunds navigation bar, not a tab.
+    private func openSettings() {
+        let settingsButton = app.buttons["refunds.openSettings"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 3))
+        settingsButton.tap()
     }
 
     private func addRefund(

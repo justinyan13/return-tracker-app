@@ -52,6 +52,8 @@ final class RefundFormViewModel {
     private let savedTrackedDateKind: TrackedDateKind
     private var defaultExpectedBusinessDays: Int
     private var shouldDeriveExpectedDate: Bool
+    /// Whether the currency was picked on the form itself.
+    private var didChooseCurrency = false
 
     /// For a new return the toggle decides; an existing one keeps whatever it
     /// was saved as.
@@ -198,13 +200,21 @@ final class RefundFormViewModel {
     ) {
         defaultExpectedBusinessDays = max(expectedBusinessDays, 1)
 
-        if !isEditing {
+        if !isEditing && !didChooseCurrency {
             currencyCode = Self.normalizedCurrencyCode(defaultCurrencyCode)
         }
 
         if !isEditing || shouldDeriveExpectedDate {
             deriveExpectedDate()
         }
+    }
+
+    /// Sets the currency for this refund alone. The default in Settings is
+    /// left untouched, and a later `applySettings` no longer overwrites the
+    /// choice.
+    func setCurrencyCode(_ code: String) {
+        didChooseCurrency = true
+        currencyCode = Self.normalizedCurrencyCode(code)
     }
 
     func setTrackedDate(_ date: Date) {

@@ -49,33 +49,3 @@ struct RefundChoice: View {
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
     }
 }
-
-/// A tappable row that reports whether it is the current choice, for the lists
-/// that stand in for inline pickers.
-struct RefundSelectionRow: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Text(title)
-                    .font(.system(.subheadline))
-                    .foregroundStyle(RefundTheme.ink)
-
-                Spacer(minLength: 8)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(.footnote).weight(.medium))
-                        .foregroundStyle(RefundTheme.ink)
-                }
-            }
-            .padding(.vertical, 15)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityValue(isSelected ? "Selected" : "Not selected")
-    }
-}

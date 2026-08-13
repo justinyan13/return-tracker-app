@@ -5,7 +5,7 @@ final class FilteringSortingTests: XCTestCase {
     private let calendar = DomainTestSupport.calendar
     private let now = DomainTestSupport.date(2026, 8, 6)
 
-    func testScopeSearchRetailerAndMethodFilters() {
+    func testScopeAndSearchFilters() {
         let overdue = makeRefund(
             retailer: "Acme",
             item: "Blue jacket",
@@ -44,6 +44,15 @@ final class FilteringSortingTests: XCTestCase {
         XCTAssertEqual(
             RefundQueryService.filter(
                 refunds,
+                using: RefundFilter(scope: .refunded),
+                now: now,
+                calendar: calendar
+            ).map(\.id),
+            [refunded.id]
+        )
+        XCTAssertEqual(
+            RefundQueryService.filter(
+                refunds,
                 using: RefundFilter(searchText: "jacket"),
                 now: now,
                 calendar: calendar
@@ -54,23 +63,12 @@ final class FilteringSortingTests: XCTestCase {
             Set(
                 RefundQueryService.filter(
                     refunds,
-                    using: RefundFilter(retailer: "acme"),
+                    using: .all,
                     now: now,
                     calendar: calendar
                 ).map(\.id)
             ),
-            Set([overdue.id, refunded.id])
-        )
-        XCTAssertEqual(
-            Set(
-                RefundQueryService.filter(
-                    refunds,
-                    using: RefundFilter(refundMethod: .giftCard),
-                    now: now,
-                    calendar: calendar
-                ).map(\.id)
-            ),
-            Set([disputed.id, refunded.id])
+            Set([overdue.id, disputed.id, refunded.id])
         )
     }
 
@@ -123,35 +121,6 @@ final class FilteringSortingTests: XCTestCase {
             Set(results.map(\.id)),
             Set([upcoming.id, overdue.id, disputed.id])
         )
-    }
-
-    func testInclusiveDateRange() {
-        let first = makeRefund(
-            retailer: "First",
-            item: "Item",
-            amount: 10,
-            expectedOffset: 2,
-            returnOffset: -10
-        )
-        let second = makeRefund(
-            retailer: "Second",
-            item: "Item",
-            amount: 20,
-            expectedOffset: 3,
-            returnOffset: -2
-        )
-
-        let results = RefundQueryService.filter(
-            [first, second],
-            using: RefundFilter(
-                startDate: DomainTestSupport.addingDays(-3, to: now),
-                endDate: DomainTestSupport.addingDays(-1, to: now)
-            ),
-            now: now,
-            calendar: calendar
-        )
-
-        XCTAssertEqual(results.map(\.id), [second.id])
     }
 
     func testSortingByAmountRetailerAndStatus() {

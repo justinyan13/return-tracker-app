@@ -1,44 +1,20 @@
 import Foundation
 
+/// The scopes shown as tabs above the list, in the order they appear.
 enum RefundFilterScope: String, CaseIterable, Identifiable, Sendable {
-    case all
     case active
     case overdue
     case refunded
-    case disputed
+    case all
 
     var id: String { rawValue }
 
-    static let quickScopes: [RefundFilterScope] = [
-        .active,
-        .overdue,
-        .refunded,
-        .all
-    ]
-
     var displayName: String {
         switch self {
-        case .all: "All"
         case .active: "Open"
         case .overdue: "Overdue"
         case .refunded: "Refunded"
-        case .disputed: "Disputed"
-        }
-    }
-}
-
-enum RefundDateField: String, CaseIterable, Identifiable, Sendable {
-    case returnDate
-    case expectedRefundDate
-    case actualRefundDate
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .returnDate: "Return date"
-        case .expectedRefundDate: "Expected refund date"
-        case .actualRefundDate: "Actual refund date"
+        case .all: "All"
         }
     }
 }
@@ -46,28 +22,13 @@ enum RefundDateField: String, CaseIterable, Identifiable, Sendable {
 struct RefundFilter: Sendable {
     var scope: RefundFilterScope
     var searchText: String
-    var retailer: String?
-    var startDate: Date?
-    var endDate: Date?
-    var dateField: RefundDateField
-    var refundMethod: RefundMethod?
 
     init(
         scope: RefundFilterScope = .all,
-        searchText: String = "",
-        retailer: String? = nil,
-        startDate: Date? = nil,
-        endDate: Date? = nil,
-        dateField: RefundDateField = .returnDate,
-        refundMethod: RefundMethod? = nil
+        searchText: String = ""
     ) {
         self.scope = scope
         self.searchText = searchText
-        self.retailer = retailer
-        self.startDate = startDate
-        self.endDate = endDate
-        self.dateField = dateField
-        self.refundMethod = refundMethod
     }
 
     static let all = RefundFilter()
@@ -116,10 +77,7 @@ enum RefundQueryService {
     ) -> [Refund] {
         refunds.filter { refund in
             matchesScope(refund, scope: filter.scope, now: now, calendar: calendar) &&
-                matchesSearch(refund, text: filter.searchText) &&
-                matchesRetailer(refund, retailer: filter.retailer) &&
-                matchesDateRange(refund, filter: filter, calendar: calendar) &&
-                (filter.refundMethod == nil || refund.refundMethod == filter.refundMethod)
+                matchesSearch(refund, text: filter.searchText)
         }
     }
 
@@ -171,18 +129,6 @@ enum RefundQueryService {
         )
     }
 
-    static func availableRetailers(in refunds: [Refund]) -> [String] {
-        Array(
-            Set(
-                refunds
-                    .map(\.retailerName)
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-            )
-        )
-        .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
     private static func matchesScope(
         _ refund: Refund,
         scope: RefundFilterScope,
@@ -199,8 +145,6 @@ enum RefundQueryService {
             return status == .overdue
         case .refunded:
             return status == .refunded
-        case .disputed:
-            return status == .disputed
         }
     }
 
@@ -217,47 +161,6 @@ enum RefundQueryService {
             refund.notes
         ]
         .contains { $0.localizedCaseInsensitiveContains(query) }
-    }
-
-    private static func matchesRetailer(_ refund: Refund, retailer: String?) -> Bool {
-        guard let retailer,
-              !retailer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return true
-        }
-        return refund.retailerName.compare(
-            retailer,
-            options: [.caseInsensitive, .diacriticInsensitive]
-        ) == .orderedSame
-    }
-
-    private static func matchesDateRange(
-        _ refund: Refund,
-        filter: RefundFilter,
-        calendar: Calendar
-    ) -> Bool {
-        let date: Date?
-        switch filter.dateField {
-        case .returnDate:
-            date = refund.returnDate
-        case .expectedRefundDate:
-            date = refund.expectedRefundDate
-        case .actualRefundDate:
-            date = refund.actualRefundDate
-        }
-
-        guard let date else {
-            return filter.startDate == nil && filter.endDate == nil
-        }
-
-        if let startDate = filter.startDate,
-           calendar.startOfDay(for: date) < calendar.startOfDay(for: startDate) {
-            return false
-        }
-        if let endDate = filter.endDate,
-           calendar.startOfDay(for: date) > calendar.startOfDay(for: endDate) {
-            return false
-        }
-        return true
     }
 
     private static func compare(

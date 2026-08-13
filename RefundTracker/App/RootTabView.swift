@@ -5,13 +5,13 @@ struct RootTabView: View {
     private enum AppTab: Hashable {
         case refunds
         case insights
-        case settings
     }
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     @State private var selectedTab: AppTab = .refunds
     @State private var isPresentingAddRefund = false
+    @State private var isPresentingSettings = false
     @State private var isPresentingOnboarding = false
     @State private var isShowingStartupError = false
     @State private var queryRevision = UUID()
@@ -31,7 +31,10 @@ struct RootTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab(value: AppTab.refunds) {
-                RefundListView(onAddRefund: presentAddRefund)
+                RefundListView(
+                    onAddRefund: presentAddRefund,
+                    onOpenSettings: presentSettings
+                )
             } label: {
                 Label("Refunds", systemImage: "list.clipboard")
                     .labelStyle(.iconOnly)
@@ -44,19 +47,17 @@ struct RootTabView: View {
                 Label("Insights", systemImage: "chart.bar.fill")
                     .labelStyle(.iconOnly)
             }
-
-            Tab(value: AppTab.settings) {
-                SettingsView()
-            } label: {
-                Label("Settings", systemImage: "slider.horizontal.3")
-                    .labelStyle(.iconOnly)
-            }
         }
         .tint(RefundTheme.ink)
         .windowAppearance(settings.appearance)
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $isPresentingAddRefund) {
             RefundFormView()
+                .environment(settings)
+                .presentationCornerRadius(6)
+        }
+        .sheet(isPresented: $isPresentingSettings) {
+            SettingsView()
                 .environment(settings)
                 .presentationCornerRadius(6)
         }
@@ -114,6 +115,10 @@ struct RootTabView: View {
 
     private func presentAddRefund() {
         isPresentingAddRefund = true
+    }
+
+    private func presentSettings() {
+        isPresentingSettings = true
     }
 
     private var reminderErrorBinding: Binding<Bool> {

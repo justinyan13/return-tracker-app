@@ -57,6 +57,34 @@ final class RefundFormViewModelTests: XCTestCase {
         XCTAssertEqual(refund.expectedRefundDate, expectedDate)
     }
 
+    /// The currency chosen on the form belongs to that refund alone, and a
+    /// later read of the app-wide default must not overwrite it.
+    @MainActor
+    func testPerRefundCurrencyOverridesTheDefaultAndSurvivesSettings() {
+        let viewModel = RefundFormViewModel(
+            defaultCurrencyCode: "USD",
+            calendar: calendar,
+            now: DomainTestSupport.date(2026, 8, 6)
+        )
+
+        viewModel.setCurrencyCode("jpy")
+        XCTAssertEqual(viewModel.currencyCode, "JPY")
+
+        viewModel.applySettings(
+            expectedBusinessDays: 10,
+            defaultCurrencyCode: "USD"
+        )
+        XCTAssertEqual(viewModel.currencyCode, "JPY")
+
+        viewModel.retailerName = "Muji"
+        viewModel.amountText = "4200"
+
+        let refund = Refund()
+        viewModel.apply(to: refund)
+
+        XCTAssertEqual(refund.currencyCode, "JPY")
+    }
+
     @MainActor
     func testEditingPreservesHiddenLegacyFieldsAndSavedCurrency() {
         let purchaseDate = DomainTestSupport.date(2026, 7, 20)

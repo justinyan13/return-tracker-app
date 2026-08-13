@@ -17,86 +17,54 @@ final class RefundListViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testInitialScopeIsOpenAndQuickScopesUseRequestedOrder() {
+    func testInitialScopeIsOpenAndScopesUseRequestedOrder() {
         let viewModel = RefundListViewModel()
 
         XCTAssertEqual(viewModel.selectedScope, .active)
         XCTAssertEqual(viewModel.selectedScope.displayName, "Open")
         XCTAssertEqual(
-            RefundFilterScope.quickScopes,
+            RefundFilterScope.allCases,
             [.active, .overdue, .refunded, .all]
         )
     }
 
     @MainActor
-    func testInvertedDateRangeStillMatchesRecords() {
-        let inRange = refund(expected: DomainTestSupport.date(2026, 8, 10))
-        let outOfRange = refund(expected: DomainTestSupport.date(2026, 9, 20))
+    func testScopeAndSearchNarrowTheResults() {
+        let matching = refund(
+            expected: DomainTestSupport.date(2026, 8, 10),
+            retailer: "Everlane"
+        )
+        let other = refund(
+            expected: DomainTestSupport.date(2026, 8, 12),
+            retailer: "Wayfair"
+        )
 
         let viewModel = RefundListViewModel()
-        viewModel.selectedDateField = .expectedRefundDate
-        viewModel.usesExpectedDateRange = true
-        // Dragging the filter sheet away skips `normalizeDateRange()`, so the
-        // bounds can arrive reversed.
-        viewModel.expectedDateStart = DomainTestSupport.date(2026, 8, 31)
-        viewModel.expectedDateEnd = DomainTestSupport.date(2026, 8, 1)
+        viewModel.selectedScope = .active
+        viewModel.searchText = "everlane"
 
         let results = viewModel.results(
-            from: [inRange, outOfRange],
+            from: [matching, other],
             now: DomainTestSupport.date(2026, 8, 5)
         )
 
-        XCTAssertEqual(results.map(\.id), [inRange.id])
+        XCTAssertEqual(results.map(\.id), [matching.id])
     }
 
     @MainActor
-    func testNormalizeDateRangeOrdersTheBounds() {
-        let viewModel = RefundListViewModel()
-        let early = DomainTestSupport.date(2026, 8, 1)
-        let late = DomainTestSupport.date(2026, 8, 31)
-        viewModel.expectedDateStart = late
-        viewModel.expectedDateEnd = early
-
-        viewModel.normalizeDateRange()
-
-        XCTAssertEqual(viewModel.expectedDateStart, early)
-        XCTAssertEqual(viewModel.expectedDateEnd, late)
-    }
-
-    @MainActor
-    func testDateRangeIsIgnoredWhenTheToggleIsOff() {
-        let outOfRange = refund(expected: DomainTestSupport.date(2026, 12, 25))
+    func testSortDirectionAppliesToTheResults() {
+        let earlier = refund(expected: DomainTestSupport.date(2026, 8, 10))
+        let later = refund(expected: DomainTestSupport.date(2026, 8, 20))
 
         let viewModel = RefundListViewModel()
-        viewModel.usesExpectedDateRange = false
-        viewModel.expectedDateStart = DomainTestSupport.date(2026, 8, 1)
-        viewModel.expectedDateEnd = DomainTestSupport.date(2026, 8, 2)
+        viewModel.selectedScope = .all
+        viewModel.sortDirection = .descending
 
         let results = viewModel.results(
-            from: [outOfRange],
+            from: [earlier, later],
             now: DomainTestSupport.date(2026, 8, 5)
         )
 
-        XCTAssertEqual(results.count, 1)
-    }
-
-    @MainActor
-    func testClearFiltersResetsEveryAdvancedFilter() {
-        let viewModel = RefundListViewModel()
-        viewModel.selectedScope = .overdue
-        viewModel.selectedRetailer = "Everlane"
-        viewModel.selectedMethod = .giftCard
-        viewModel.usesExpectedDateRange = true
-
-        XCTAssertEqual(viewModel.appliedFilterCount, 4)
-
-        viewModel.clearFilters()
-
-        XCTAssertEqual(viewModel.selectedScope, .all)
-        XCTAssertNil(viewModel.selectedRetailer)
-        XCTAssertNil(viewModel.selectedMethod)
-        XCTAssertFalse(viewModel.usesExpectedDateRange)
-        XCTAssertFalse(viewModel.hasAdvancedFilters)
-        XCTAssertEqual(viewModel.appliedFilterCount, 0)
+        XCTAssertEqual(results.map(\.id), [later.id, earlier.id])
     }
 }

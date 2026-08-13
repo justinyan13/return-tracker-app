@@ -16,16 +16,23 @@ struct InsightsView: View {
             ZStack {
                 RefundBackdrop()
 
-                VStack(spacing: 0) {
-                    InsightsModePicker(selection: $selectedMode)
+                // The picker scrolls with the content rather than sitting above
+                // it, so a drag moves the whole screen together instead of
+                // peeling the cards away from a pinned header.
+                ScrollView {
+                    VStack(spacing: 0) {
+                        InsightsModePicker(selection: $selectedMode)
 
-                    switch selectedMode {
-                    case .completed:
-                        completedInsights
-                    case .outstanding:
-                        outstandingInsights
+                        switch selectedMode {
+                        case .completed:
+                            completedInsights
+                        case .outstanding:
+                            outstandingInsights
+                        }
                     }
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                .accessibilityIdentifier(selectedMode.contentAccessibilityIdentifier)
             }
             .navigationTitle("Insights")
             .onAppear {
@@ -76,54 +83,42 @@ struct InsightsView: View {
         )
 
         if snapshot.completedRefundCount == 0 {
-            ScrollView {
-                InsightsModeEmptyState(mode: .completed)
-            }
-            .accessibilityIdentifier("insights.completedContent")
+            InsightsModeEmptyState(mode: .completed)
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    CompletedHeader(
-                        amount: snapshot.totalRefundsReceived,
-                        currencyCode: currencyCode,
-                        completedCount: snapshot.completedRefundCount,
-                        averageDays: averageDaysLabel(snapshot.averageRefundDays),
-                        merchantCount: snapshot.completedRetailerCount
-                    )
+            LazyVStack(alignment: .leading, spacing: 0) {
+                CompletedHeader(
+                    amount: snapshot.totalRefundsReceived,
+                    currencyCode: currencyCode,
+                    completedCount: snapshot.completedRefundCount,
+                    averageDays: averageDaysLabel(snapshot.averageRefundDays),
+                    merchantCount: snapshot.completedRetailerCount
+                )
 
-                    MonthlyRefundChart(
-                        totals: snapshot.monthlyRefundTotals,
-                        currencyCode: currencyCode
-                    )
-                    .padding(.top, 44)
+                MonthlyRefundChart(
+                    totals: snapshot.monthlyRefundTotals,
+                    currencyCode: currencyCode
+                )
+                .padding(.top, 44)
 
-                    RetailerTimingSection(
-                        retailers: Array(snapshot.retailerPerformance.prefix(5))
-                    )
-                    .padding(.top, 44)
+                RetailerTimingSection(
+                    retailers: Array(snapshot.retailerPerformance.prefix(5))
+                )
+                .padding(.top, 44)
 
-                    Text("\(currencyCode) only · currencies are never converted")
-                        .eyebrow(size: 9)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 40)
-                }
-                .padding(.horizontal, 22)
-                .padding(.bottom, 40)
+                Text("\(currencyCode) only · currencies are never converted")
+                    .eyebrow(size: 9)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 40)
             }
-            .refreshable {
-                viewModel.refresh()
-            }
-            .accessibilityIdentifier("insights.completedContent")
+            .padding(.horizontal, 22)
+            .padding(.bottom, 40)
         }
     }
 
     @ViewBuilder
     private var outstandingInsights: some View {
         if refunds.isEmpty {
-            ScrollView {
-                InsightsModeEmptyState(mode: .outstanding)
-            }
-            .accessibilityIdentifier("insights.outstandingContent")
+            InsightsModeEmptyState(mode: .outstanding)
         } else {
             let metrics = viewModel.outstandingMetrics(for: refunds)
             let preferredCurrency = settings.defaultCurrencyCode.uppercased()
@@ -132,26 +127,20 @@ struct InsightsView: View {
                 : metrics.awaitingAmountsByCurrency.keys.sorted().first
                     ?? preferredCurrency
 
-            ScrollView {
-                RefundSummaryHeader(
-                    amount: metrics.awaitingAmountsByCurrency[primaryCurrency] ?? 0,
-                    currencyCode: primaryCurrency,
-                    otherAmounts: metrics.awaitingAmountsByCurrency.filter {
-                        $0.key.caseInsensitiveCompare(
-                            primaryCurrency
-                        ) != .orderedSame
-                    },
-                    openCount: metrics.openReturnCount,
-                    overdueCount: metrics.overdueRefundCount,
-                    refundedCount: metrics.refundedCount
-                )
-                .padding(.horizontal, 22)
-                .padding(.bottom, 40)
-            }
-            .refreshable {
-                viewModel.refresh()
-            }
-            .accessibilityIdentifier("insights.outstandingContent")
+            RefundSummaryHeader(
+                amount: metrics.awaitingAmountsByCurrency[primaryCurrency] ?? 0,
+                currencyCode: primaryCurrency,
+                otherAmounts: metrics.awaitingAmountsByCurrency.filter {
+                    $0.key.caseInsensitiveCompare(
+                        primaryCurrency
+                    ) != .orderedSame
+                },
+                openCount: metrics.openReturnCount,
+                overdueCount: metrics.overdueRefundCount,
+                refundedCount: metrics.refundedCount
+            )
+            .padding(.horizontal, 22)
+            .padding(.bottom, 40)
         }
     }
 
@@ -173,6 +162,17 @@ private enum InsightsMode: String, CaseIterable, Identifiable {
             "Completed"
         case .outstanding:
             "Outstanding"
+        }
+    }
+
+    /// Both modes share one scroll view now, so it carries whichever mode is
+    /// on screen.
+    var contentAccessibilityIdentifier: String {
+        switch self {
+        case .completed:
+            "insights.completedContent"
+        case .outstanding:
+            "insights.outstandingContent"
         }
     }
 }

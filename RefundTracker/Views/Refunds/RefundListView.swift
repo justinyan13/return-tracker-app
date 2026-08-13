@@ -11,16 +11,20 @@ struct RefundListView: View {
     @State private var listViewModel = RefundListViewModel()
     @State private var dashboardViewModel = DashboardViewModel()
     @State private var navigationPath: [UUID] = []
-    @State private var isPresentingFilters = false
     @State private var isShowingSearch = false
     @FocusState private var isSearchFocused: Bool
     @State private var errorMessage: String?
 
     private let attachmentStore = AttachmentStore.shared
     private let onAddRefund: () -> Void
+    private let onOpenSettings: () -> Void
 
-    init(onAddRefund: @escaping () -> Void = {}) {
+    init(
+        onAddRefund: @escaping () -> Void = {},
+        onOpenSettings: @escaping () -> Void = {}
+    ) {
         self.onAddRefund = onAddRefund
+        self.onOpenSettings = onOpenSettings
     }
 
     private var results: [Refund] {
@@ -28,10 +32,6 @@ struct RefundListView: View {
             from: refunds,
             now: dashboardViewModel.referenceDate
         )
-    }
-
-    private var retailers: [String] {
-        RefundQueryService.availableRetailers(in: refunds)
     }
 
     var body: some View {
@@ -48,6 +48,17 @@ struct RefundListView: View {
                     }
                     .accessibilityIdentifier("refunds.addRefund")
                 }
+
+                // Keeps the two buttons in their own glass capsules instead of
+                // sharing one.
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onOpenSettings) {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    .accessibilityIdentifier("refunds.openSettings")
+                }
             }
             .navigationDestination(for: UUID.self) { refundID in
                 if let refund = refunds.first(where: { $0.id == refundID }) {
@@ -57,12 +68,6 @@ struct RefundListView: View {
                     )
                     .environment(settings)
                 }
-            }
-            .sheet(isPresented: $isPresentingFilters) {
-                RefundFilterSheet(
-                    viewModel: listViewModel,
-                    retailers: retailers
-                )
             }
             .alert("Couldn’t update refunds", isPresented: errorAlertBinding) {
                 Button("OK", role: .cancel) {}
@@ -204,9 +209,6 @@ struct RefundListView: View {
         .scrollContentBackground(.hidden)
         .background(Color.clear)
         .contentMargins(.bottom, 24, for: .scrollContent)
-        .refreshable {
-            dashboardViewModel.refresh()
-        }
         .accessibilityIdentifier("refundList")
     }
 
@@ -233,7 +235,7 @@ struct RefundListView: View {
                 )
                 .accessibilityIdentifier("refundSearchButton")
 
-                filterAndSortMenu
+                sortMenu
             }
 
             Hairline(color: RefundTheme.lineStrong)
@@ -279,7 +281,7 @@ struct RefundListView: View {
     private var scopePicker: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 22) {
-                ForEach(RefundFilterScope.quickScopes) { scope in
+                ForEach(RefundFilterScope.allCases) { scope in
                     RefundScopeTab(
                         title: scope.displayName,
                         isSelected: listViewModel.selectedScope == scope
@@ -298,7 +300,7 @@ struct RefundListView: View {
         .scrollIndicators(.hidden)
     }
 
-    private var filterAndSortMenu: some View {
+    private var sortMenu: some View {
         Menu {
             Picker("Sort by", selection: $listViewModel.sortOption) {
                 ForEach(RefundSortOption.allCases) { option in
@@ -312,38 +314,15 @@ struct RefundListView: View {
                 Label("Descending", systemImage: "arrow.down")
                     .tag(RefundSortDirection.descending)
             }
-
-            Divider()
-
-            Button {
-                isPresentingFilters = true
-            } label: {
-                Label(
-                    advancedFilterLabel,
-                    systemImage: "line.3.horizontal.decrease"
-                )
-            }
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 17, weight: .regular))
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
-        .foregroundStyle(
-            listViewModel.hasAdvancedFilters
-                ? RefundTheme.ink
-                : RefundTheme.inkSoft
-        )
-        .accessibilityLabel("Filter and sort refunds")
-        .accessibilityIdentifier("refundFilterAndSortButton")
-    }
-
-    private var advancedFilterLabel: String {
-        let count = listViewModel.hasAdvancedFilters
-            ? listViewModel.appliedFilterCount
-                - (listViewModel.selectedScope == .all ? 0 : 1)
-            : 0
-        return count == 0 ? "More filters" : "More filters (\(count))"
+        .foregroundStyle(RefundTheme.inkSoft)
+        .accessibilityLabel("Sort refunds")
+        .accessibilityIdentifier("refundSortButton")
     }
 
     private var errorAlertBinding: Binding<Bool> {
@@ -442,8 +421,6 @@ private extension RefundFilterScope {
             "refundScope.refunded"
         case .all:
             "refundScope.all"
-        case .disputed:
-            "refundScope.disputed"
         }
     }
 }

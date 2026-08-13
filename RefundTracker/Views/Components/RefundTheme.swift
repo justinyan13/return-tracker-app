@@ -73,6 +73,61 @@ private extension UIColor {
 enum RefundChrome {
     static func apply() {
         UIDatePicker.appearance().tintColor = UIColor(RefundTheme.ink)
+        applyNavigationTitle()
+    }
+
+    /// The navigation title is the one piece of type the content layer cannot
+    /// reach. SwiftUI sets it in SF Pro, so "Refunds" sat in a modern grotesque
+    /// directly above serif figures and read as a different app. Only the title
+    /// attributes are overridden here — the backgrounds are configured from the
+    /// system defaults, so navigation keeps its Liquid Glass.
+    private static func applyNavigationTitle() {
+        let ink = UIColor(RefundTheme.ink)
+
+        let largeTitle: [NSAttributedString.Key: Any] = [
+            .font: serifFont(for: .largeTitle, weight: .regular),
+            .foregroundColor: ink,
+            // At display sizes the default spacing opens into gaps. Pulling the
+            // tracking in is what makes a masthead look set rather than typed.
+            .kern: -0.6
+        ]
+
+        let inlineTitle: [NSAttributedString.Key: Any] = [
+            .font: serifFont(for: .headline, weight: .semibold),
+            .foregroundColor: ink
+        ]
+
+        let scrolled = UINavigationBarAppearance()
+        scrolled.configureWithDefaultBackground()
+        scrolled.largeTitleTextAttributes = largeTitle
+        scrolled.titleTextAttributes = inlineTitle
+
+        let atEdge = UINavigationBarAppearance()
+        atEdge.configureWithTransparentBackground()
+        atEdge.largeTitleTextAttributes = largeTitle
+        atEdge.titleTextAttributes = inlineTitle
+
+        let bar = UINavigationBar.appearance()
+        bar.standardAppearance = scrolled
+        bar.compactAppearance = scrolled
+        bar.scrollEdgeAppearance = atEdge
+        bar.compactScrollEdgeAppearance = atEdge
+    }
+
+    /// Serif at whatever size UIKit had already chosen for the style, so the
+    /// title still answers to the reader's text size.
+    private static func serifFont(
+        for textStyle: UIFont.TextStyle,
+        weight: UIFont.Weight
+    ) -> UIFont {
+        let preferred = UIFont.preferredFont(forTextStyle: textStyle)
+        let descriptor = preferred.fontDescriptor
+            .addingAttributes([
+                .traits: [UIFontDescriptor.TraitKey.weight: weight]
+            ])
+            .withDesign(.serif)
+        guard let descriptor else { return preferred }
+        return UIFont(descriptor: descriptor, size: preferred.pointSize)
     }
 }
 
@@ -209,9 +264,12 @@ private struct SerifModifier: ViewModifier {
 }
 
 extension View {
+    /// `inkSoft`, not `inkFaint`, is the default: eyebrows label real content,
+    /// and `inkFaint` on paper measures about 2.7:1 — under the 4.5:1 that small
+    /// text needs. `inkFaint` stays available for marks that carry no meaning.
     func eyebrow(
         size: CGFloat = 11,
-        color: Color = RefundTheme.inkFaint
+        color: Color = RefundTheme.inkSoft
     ) -> some View {
         modifier(EyebrowModifier(size: size, color: color))
     }
