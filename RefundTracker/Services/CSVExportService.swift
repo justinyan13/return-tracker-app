@@ -42,6 +42,8 @@ struct CSVExportService {
         var rows = [headers.map(escape).joined(separator: ",")]
         rows.reserveCapacity(refunds.count + 1)
 
+        let timeZone = calendar.timeZone
+
         for refund in refunds {
             let fields = [
                 refund.id.uuidString,
@@ -52,17 +54,17 @@ struct CSVExportService {
                 refund.currencyCode,
                 refund.effectiveStatus(on: now, calendar: calendar).displayName,
                 refund.refundMethod.displayName,
-                dateString(refund.purchaseDate),
-                dateString(refund.returnDate),
-                dateString(refund.shippedDate),
-                dateString(refund.retailerReceivedDate),
-                dateString(refund.expectedRefundDate),
-                dateString(refund.actualRefundDate),
+                dateString(refund.purchaseDate, timeZone: timeZone),
+                dateString(refund.returnDate, timeZone: timeZone),
+                dateString(refund.shippedDate, timeZone: timeZone),
+                dateString(refund.retailerReceivedDate, timeZone: timeZone),
+                dateString(refund.expectedRefundDate, timeZone: timeZone),
+                dateString(refund.actualRefundDate, timeZone: timeZone),
                 refund.trackingNumber,
                 refund.returnCarrier,
                 refund.notes,
-                dateTimeString(refund.createdDate),
-                dateTimeString(refund.lastUpdatedDate)
+                dateTimeString(refund.createdDate, timeZone: timeZone),
+                dateTimeString(refund.lastUpdatedDate, timeZone: timeZone)
             ]
             rows.append(fields.map(escape).joined(separator: ","))
         }
@@ -80,7 +82,8 @@ struct CSVExportService {
         directory: URL = FileManager.default.temporaryDirectory
     ) throws -> URL {
         let safeFilename = sanitizedFilename(
-            filename ?? "Refunds-\(filenameDateString(now)).csv"
+            filename ??
+                "Refunds-\(filenameDateString(now, timeZone: calendar.timeZone)).csv"
         )
         let outputURL = directory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -100,6 +103,7 @@ struct CSVExportService {
     }
 
     static func escape(_ value: String) -> String {
+        let value = neutralizingFormulaPrefix(value)
         guard value.contains(",") ||
                 value.contains("\"") ||
                 value.contains("\n") ||
@@ -109,28 +113,46 @@ struct CSVExportService {
         return "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
     }
 
-    private static func dateString(_ date: Date?) -> String {
+    /// Spreadsheets treat a leading `=`, `+`, `-`, or `@` as the start of a
+    /// formula, so a note like "+1 800-555-0199" imports as `#NAME?` — and a
+    /// crafted one can read other cells. Quoting does not suppress that; a
+    /// leading apostrophe does, and spreadsheets strip it on display.
+    private static func neutralizingFormulaPrefix(_ value: String) -> String {
+        guard let first = value.first,
+              "=+-@\t\r".contains(first) else {
+            return value
+        }
+        return "'\(value)"
+    }
+
+    /// Every date the app stores is a *local* midnight, so it has to be rendered
+    /// in the same zone to name the same day. `Date.ISO8601FormatStyle` defaults
+    /// to GMT, which pushes each date a day earlier everywhere east of it.
+    private static func dateString(_ date: Date?, timeZone: TimeZone) -> String {
         guard let date else { return "" }
         return date.formatted(
-            .iso8601
+            Date.ISO8601FormatStyle(dateSeparator: .dash, timeZone: timeZone)
                 .year()
                 .month()
                 .day()
-                .dateSeparator(.dash)
         )
     }
 
-    private static func dateTimeString(_ date: Date) -> String {
-        ISO8601DateFormatter().string(from: date)
+    private static func dateTimeString(_ date: Date, timeZone: TimeZone) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = timeZone
+        return formatter.string(from: date)
     }
 
-    private static func filenameDateString(_ date: Date) -> String {
+    private static func filenameDateString(
+        _ date: Date,
+        timeZone: TimeZone
+    ) -> String {
         date.formatted(
-            .iso8601
+            Date.ISO8601FormatStyle(dateSeparator: .dash, timeZone: timeZone)
                 .year()
                 .month()
                 .day()
-                .dateSeparator(.dash)
         )
     }
 

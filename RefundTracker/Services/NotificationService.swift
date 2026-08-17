@@ -35,11 +35,16 @@ enum NotificationPlanner {
         now: Date = .now,
         calendar: Calendar = .current
     ) -> [PlannedRefundNotification] {
+        // A return still sitting on the hallway table cannot have a late
+        // refund, so it must not be nudged about one. `Refund.isOverdue`
+        // already refuses to call this state overdue; reminding here anyway
+        // would tell the user to chase a retailer that has received nothing.
         guard preferences.isEnabled,
               refund.status != .cancelled,
               refund.status != .disputed,
               refund.status != .refunded,
-              refund.actualRefundDate == nil else {
+              refund.actualRefundDate == nil,
+              !refund.isAwaitingShipment else {
             return []
         }
 
@@ -277,14 +282,20 @@ final class NotificationService {
             NotificationPlanner.maximumScheduledRefundNotifications -
                 nonManagedRequestCount
         )
-        let plan = NotificationPlanner.plan(
+        let fullPlan = NotificationPlanner.plan(
             for: refund,
             preferences: preferences,
             now: now,
             calendar: calendar
         )
-        .prefix(maximumCount)
-        .map { $0 }
+        let plan = Array(fullPlan.prefix(maximumCount))
+
+        // Losing every reminder for this refund is not something to swallow:
+        // nothing reschedules on launch, so silence here is permanent until the
+        // user happens to edit a preference.
+        if !fullPlan.isEmpty, plan.isEmpty {
+            throw NotificationServiceError.pendingRequestCapacityUnavailable
+        }
 
         try await reconcilePendingRequests(
             with: plan,
@@ -377,8 +388,13 @@ final class NotificationService {
             "reminderKind": item.kind.rawValue
         ]
 
+        // Deliberately without `.calendar`/`.timeZone`: requesting those stamps
+        // the zone at scheduling time into the trigger, and the intent is a
+        // fixed 9am wall clock. Nothing reschedules on a zone change, so a
+        // pinned zone would leave a traveller's reminders arriving at the old
+        // local hour for good.
         let components = calendar.dateComponents(
-            [.calendar, .timeZone, .year, .month, .day, .hour, .minute],
+            [.year, .month, .day, .hour, .minute],
             from: item.fireDate
         )
         let trigger = UNCalendarNotificationTrigger(

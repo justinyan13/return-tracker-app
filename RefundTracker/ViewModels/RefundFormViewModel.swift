@@ -155,10 +155,17 @@ final class RefundFormViewModel {
 
     /// A deadline can only be today or later; the other two kinds record
     /// something that already happened, so they cap at the present.
+    ///
+    /// A saved deadline that has already lapsed is a state the app supports
+    /// (`isShipmentOverdue`), so the lower bound stretches back to include it —
+    /// otherwise editing such a return hands the picker a selection outside its
+    /// own range and the date the user set becomes unrepresentable.
     var trackedDateRange: ClosedRange<Date> {
-        trackedDateKind == .shipBy
-            ? today...Date.distantFuture
-            : Date.distantPast...shippedDateUpperBound
+        guard trackedDateKind == .shipBy else {
+            return Date.distantPast...shippedDateUpperBound
+        }
+        let lowerBound = min(today, calendar.startOfDay(for: returnDate))
+        return lowerBound...Date.distantFuture
     }
 
     var amount: Decimal? {
@@ -219,8 +226,9 @@ final class RefundFormViewModel {
 
     func setTrackedDate(_ date: Date) {
         let day = calendar.startOfDay(for: date)
+        let range = trackedDateRange
         returnDate = trackedDateKind == .shipBy
-            ? max(day, today)
+            ? max(day, range.lowerBound)
             : min(day, calendar.startOfDay(for: shippedDateUpperBound))
         shouldDeriveExpectedDate = true
         deriveExpectedDate()

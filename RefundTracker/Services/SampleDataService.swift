@@ -170,19 +170,30 @@ enum SampleDataService {
                 predicate: #Predicate { $0.isSampleData == true }
             )
         )
-        for refund in samples {
-            context.delete(refund)
-        }
-        try context.save()
+        try delete(samples, in: context)
     }
 
     /// An explicit full reset for settings flows that clearly warn the user.
     /// Sample reset uses `reset(in:)` and never deletes real records.
     static func deleteAllRefunds(in context: ModelContext) throws {
         let refunds = try context.fetch(FetchDescriptor<Refund>())
+        try delete(refunds, in: context)
+    }
+
+    /// The cascade rule removes attachment *rows*, but their bytes live outside
+    /// the store. Without this the files stay in Application Support with no
+    /// row left to point at them, and nothing in the app can ever reclaim them.
+    private static func delete(
+        _ refunds: [Refund],
+        in context: ModelContext
+    ) throws {
+        let storedFilenames = refunds.flatMap { refund in
+            refund.attachments.map(\.storedFilename)
+        }
         for refund in refunds {
             context.delete(refund)
         }
         try context.save()
+        try? AttachmentStore.shared.deleteFiles(named: storedFilenames)
     }
 }

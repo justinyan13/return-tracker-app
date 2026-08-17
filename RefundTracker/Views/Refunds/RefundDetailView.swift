@@ -647,15 +647,23 @@ struct RefundDetailView: View {
         }
         pendingConfirmation = nil
 
+        // Captured before the delete: once the row is gone the model is
+        // invalidated, and reading `storedFilename` off it traps.
+        let storedFilename = attachment.storedFilename
+
         refund.removeAttachment(attachment)
         modelContext.delete(attachment)
         do {
             try modelContext.save()
-            try attachmentStore.delete(attachment)
         } catch {
             modelContext.rollback()
             errorMessage = error.localizedDescription
+            return
         }
+
+        // The row is already gone; a failed file removal leaves orphaned bytes
+        // but nothing the user can act on, so it must not roll the delete back.
+        try? attachmentStore.deleteFiles(named: [storedFilename])
     }
 
     private func deleteRefund() {
