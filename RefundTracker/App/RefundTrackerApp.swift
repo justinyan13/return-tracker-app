@@ -56,7 +56,10 @@ struct RefundTrackerApp: App {
             }
         }
 
-        if arguments.contains("--ui-testing-seed") {
+        // Gated on `--ui-testing` too: on its own the seed flag writes fake
+        // records into the real on-disk store, where they reappear every
+        // launch and — not being sample data — no reset path can clear them.
+        if isUITesting, arguments.contains("--ui-testing-seed") {
             Self.seedUITestData(in: modelContainer)
         }
     }

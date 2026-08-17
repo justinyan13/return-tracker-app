@@ -13,6 +13,11 @@ struct SettingsView: View {
     @State private var presentedAlert: SettingsAlert?
     @State private var isRequestingNotifications = false
     @State private var isShowingCurrencyPicker = false
+    /// Rescheduling suspends on several notification-centre calls, so two runs
+    /// interleave freely. Each computes its stale list up front and then removes
+    /// it wholesale, which lets an older run delete requests a newer one just
+    /// added. Chaining onto this task serializes them instead.
+    @State private var rescheduleTask: Task<Void, Never>?
 
     private var currencyBinding: Binding<String> {
         Binding(
@@ -86,18 +91,7 @@ struct SettingsView: View {
             }
             .onChange(of: settings.notificationPreferences) { _, preferences in
                 guard preferences.isEnabled else { return }
-                Task {
-                    do {
-                        try await NotificationService.shared.rescheduleAll(
-                            for: refunds,
-                            preferences: preferences
-                        )
-                    } catch {
-                        await MainActor.run {
-                            presentedAlert = .error(error.localizedDescription)
-                        }
-                    }
-                }
+                reschedule(with: preferences, for: refunds)
             }
         }
     }
@@ -409,18 +403,35 @@ struct SettingsView: View {
             let currentRefunds = try modelContext.fetch(
                 FetchDescriptor<Refund>()
             )
-            Task {
-                do {
-                    try await NotificationService.shared.rescheduleAll(
-                        for: currentRefunds,
-                        preferences: settings.notificationPreferences
-                    )
-                } catch {
-                    presentedAlert = .error(error.localizedDescription)
-                }
-            }
+            reschedule(
+                with: settings.notificationPreferences,
+                for: currentRefunds
+            )
         } catch {
             presentedAlert = .error(error.localizedDescription)
+        }
+    }
+
+    /// Queues behind any reschedule still in flight, so the newest preferences
+    /// are the ones that land last. Cancellation is deliberately not used: the
+    /// reconcile has no cancellation points, so dropping a queued run would
+    /// just lose the change the user made.
+    private func reschedule(
+        with preferences: RefundNotificationPreferences,
+        for refunds: [Refund]
+    ) {
+        let previousTask = rescheduleTask
+        rescheduleTask = Task { @MainActor in
+            await previousTask?.value
+
+            do {
+                try await NotificationService.shared.rescheduleAll(
+                    for: refunds,
+                    preferences: preferences
+                )
+            } catch {
+                presentedAlert = .error(error.localizedDescription)
+            }
         }
     }
 }

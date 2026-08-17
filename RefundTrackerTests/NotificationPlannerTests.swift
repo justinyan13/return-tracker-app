@@ -82,6 +82,57 @@ final class NotificationPlannerTests: XCTestCase {
         }
     }
 
+    /// The retailer cannot be late refunding a parcel that was never posted,
+    /// and `Refund.isOverdue` agrees — so no refund reminder may be planned.
+    func testReturnAwaitingShipmentHasNoRefundReminders() {
+        let refund = Refund(
+            retailerName: "Zara",
+            itemName: "Jacket",
+            refundAmount: 80,
+            currencyCode: "USD",
+            returnDate: DomainTestSupport.date(2026, 8, 1),
+            shippedDate: nil,
+            shipByDate: DomainTestSupport.date(2026, 8, 6),
+            expectedRefundDate: DomainTestSupport.date(2026, 8, 20),
+            status: .preparingReturn
+        )
+
+        XCTAssertTrue(refund.isAwaitingShipment)
+        XCTAssertTrue(
+            NotificationPlanner.plan(
+                for: refund,
+                preferences: enabledPreferences(),
+                now: now,
+                calendar: calendar
+            ).isEmpty
+        )
+    }
+
+    /// Once it is actually in the post the same return is back in scope.
+    func testShippedReturnRegainsRefundReminders() {
+        let refund = Refund(
+            retailerName: "Zara",
+            itemName: "Jacket",
+            refundAmount: 80,
+            currencyCode: "USD",
+            returnDate: DomainTestSupport.date(2026, 8, 1),
+            shippedDate: DomainTestSupport.date(2026, 8, 2),
+            expectedRefundDate: DomainTestSupport.date(2026, 8, 20),
+            status: .shipped
+        )
+
+        XCTAssertFalse(refund.isAwaitingShipment)
+        XCTAssertEqual(
+            NotificationPlanner.plan(
+                for: refund,
+                preferences: enabledPreferences(),
+                now: now,
+                calendar: calendar
+            ).count,
+            4
+        )
+    }
+
     func testDisabledPreferencesHaveNoPlan() {
         let refund = makeRefund(
             expectedDate: DomainTestSupport.date(2026, 8, 15)

@@ -114,8 +114,15 @@ struct RefundAttachmentPicker: View {
 
             let type = item.supportedContentTypes.first ?? .image
             let fileExtension = type.preferredFilenameExtension ?? "jpg"
+            // In the device's own zone: this string is the label the user reads
+            // to tell two screenshots apart, and the GMT default can name the
+            // wrong day for anyone not on it.
             let timestamp = Date.now.formatted(
-                .iso8601.year().month().day().time(includingFractionalSeconds: false)
+                Date.ISO8601FormatStyle(timeZone: .current)
+                    .year()
+                    .month()
+                    .day()
+                    .time(includingFractionalSeconds: false)
             )
             onPicked(
                 RefundAttachmentPayload(
